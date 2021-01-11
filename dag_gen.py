@@ -51,6 +51,13 @@ class DAGGen(object):
         self.depth = kwargs.get('depth', [3.5, 0.5])
         self.exec_t = kwargs.get('exec_t', [50.0, 30.0])
         self.start_node = kwargs.get('start_node', [2, 1])
+        self.edge_num_constraint = kwargs.get('edge_constraint', False)
+
+        # Use when edge_num_constraint is True
+        # self.inbound_num = kwargs.get('inbound_num', [2, 0])
+        self.outbound_num = kwargs.get('outbound_num', [3, 0])
+
+        # Use when edge_num_constraint is False
         self.extra_arc_ratio = kwargs.get('extra_arc_ratio', 0.1)
 
         self.task_set = []
@@ -91,29 +98,53 @@ class DAGGen(object):
             self.task_set[i].level = level
             level_arr[level].append(i)
 
-        ### 3. make arc from last level
-        for level in range(depth-1, 0, -1):
-            for task_idx in level_arr[level]:
-                parent_idx = level_arr[level-1][randint(0, len(level_arr[level - 1])-1)]
+        ### 3-(A). When edge_num_constraint is True
+        if self.edge_num_constraint:
+            ### make arc for first level
+            for level in range(0, depth-1):
+                for task_idx in level_arr[level]:
+                    ob_num = rand_uniform(self.outbound_num)
 
-                self.task_set[parent_idx].child.append(task_idx)
-                self.task_set[task_idx].parent.append(parent_idx)
+                    child_idx_list = []
 
-        ### 4. make extra arc
-        for i in range(extra_arc_num):
-            arc_added_flag = False
-            while not arc_added_flag:
-                task1_idx = randint(0, task_num-1)
-                task2_idx = randint(0, task_num-1)
+                    # if desired outbound edge number is larger than the number of next level nodes, select every node
+                    if ob_num >= len(level_arr[level + 1]):
+                        child_idx_list = level_arr[level + 1]
+                    else:
+                        while len(child_idx_list) < ob_num:
+                            child_idx = level_arr[level+1][randint(0, len(level_arr[level + 1])-1)]
+                            if child_idx not in child_idx_list:
+                                child_idx_list.append(child_idx)
+                    
+                    for child_idx in child_idx_list:
+                        self.task_set[task_idx].child.append(child_idx)
+                        self.task_set[child_idx].parent.append(task_idx)
 
-                if self.task_set[task1_idx].level < self.task_set[task2_idx].level:
-                    self.task_set[task1_idx].child.append(task2_idx)
-                    self.task_set[task2_idx].parent.append(task1_idx)
-                    arc_added_flag = True
-                elif self.task_set[task1_idx].level > self.task_set[task2_idx].level:
-                    self.task_set[task2_idx].child.append(task1_idx)
-                    self.task_set[task1_idx].parent.append(task2_idx)
-                    arc_added_flag = True
+        ### 3-(B). When edge_num_constraint is False
+        else:
+            ### make arc from last level
+            for level in range(depth-1, 0, -1):
+                for task_idx in level_arr[level]:
+                    parent_idx = level_arr[level-1][randint(0, len(level_arr[level - 1])-1)]
+
+                    self.task_set[parent_idx].child.append(task_idx)
+                    self.task_set[task_idx].parent.append(parent_idx)
+
+            ### make extra arc
+            for i in range(extra_arc_num):
+                arc_added_flag = False
+                while not arc_added_flag:
+                    task1_idx = randint(0, task_num-1)
+                    task2_idx = randint(0, task_num-1)
+
+                    if self.task_set[task1_idx].level < self.task_set[task2_idx].level:
+                        self.task_set[task1_idx].child.append(task2_idx)
+                        self.task_set[task2_idx].parent.append(task1_idx)
+                        arc_added_flag = True
+                    elif self.task_set[task1_idx].level > self.task_set[task2_idx].level:
+                        self.task_set[task2_idx].child.append(task1_idx)
+                        self.task_set[task1_idx].parent.append(task2_idx)
+                        arc_added_flag = True
         
         ### 5. set deadline ( exec_t avg * (level + 1)) * 2
         for task in self.task_set:
@@ -129,15 +160,24 @@ class DAGGen(object):
         return ''
 
 if __name__ == "__main__":
-    dag_param = {
+    dag_param_1 = {
         "task_num" : [20, 0],
         "depth" : [4.5, 0.5],
         "exec_t" : [50.0, 30.0],
-        "start_node" : [1, 0],
-        "extra_arc_ratio" : 0.4,
+        "start_node" : [2, 1],
+        "extra_arc_ratio" : 0.4
     }
 
-    dag = DAGGen(**dag_param)
+    dag_param_2 = {
+        "task_num" : [20, 0],
+        "depth" : [4.5, 0.5],
+        "exec_t" : [50.0, 30.0],
+        "start_node" : [2, 0],
+        "edge_constraint" : True,
+        "outbound_num" : [2, 0]
+    }
+
+    dag = DAGGen(**dag_param_1)
 
     print(dag)
 
