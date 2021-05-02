@@ -133,21 +133,27 @@ class DAGGen(object):
             ### make extra arc
             for i in range(extra_arc_num):
                 arc_added_flag = False
-                while not arc_added_flag:
+                failCnt = 0
+                while not arc_added_flag and failCnt < 10:
                     task1_idx = randint(0, task_num-1)
                     task2_idx = randint(0, task_num-1)
 
-                    if self.task_set[task1_idx].level < self.task_set[task2_idx].level:
+                    if self.task_set[task1_idx].level < self.task_set[task2_idx].level and task2_idx not in self.task_set[task1_idx].child:
                         self.task_set[task1_idx].child.append(task2_idx)
                         self.task_set[task2_idx].parent.append(task1_idx)
                         arc_added_flag = True
-                    elif self.task_set[task1_idx].level > self.task_set[task2_idx].level:
+                    elif self.task_set[task1_idx].level > self.task_set[task2_idx].level and task1_idx not in self.task_set[task2_idx].child:
                         self.task_set[task2_idx].child.append(task1_idx)
                         self.task_set[task1_idx].parent.append(task2_idx)
                         arc_added_flag = True
+                    
+                    failCnt += 1
         
         ### 5. set deadline ( exec_t avg * (level + 1)) * 2
         for task in self.task_set:
+            task.child.sort()
+            task.parent.sort()
+
             if len(task.child) == 0:
                 task.isLeaf = True
                 task.deadline = self.exec_t[0] * (task.level+1) * 2
