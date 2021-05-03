@@ -47,10 +47,10 @@ class Task(object):
 
 class DAGGen(object):
     def __init__(self, **kwargs):
-        self.task_num = kwargs.get('task_num', [10, 3])
-        self.depth = kwargs.get('depth', [3.5, 0.5])
+        self.task_num = rand_uniform(kwargs.get('task_num', [10, 3]))
+        self.depth = rand_uniform(kwargs.get('depth', [3.5, 0.5]))
         self.exec_t = kwargs.get('exec_t', [50.0, 30.0])
-        self.start_node = kwargs.get('start_node', [2, 1])
+        self.start_node = rand_uniform(kwargs.get('start_node', [2, 1]))
         self.edge_num_constraint = kwargs.get('edge_constraint', False)
 
         # Use when edge_num_constraint is True
@@ -63,8 +63,7 @@ class DAGGen(object):
         self.task_set = []
 
         ### 1. Initialize Task
-        task_num = rand_uniform(self.task_num)
-        for i in range(task_num):
+        for i in range(self.task_num):
             task_param = {
                 "name" : "node" + str(i),
                 "exec_t" : rand_uniform(self.exec_t)
@@ -72,36 +71,33 @@ class DAGGen(object):
 
             self.task_set.append(Task(**task_param))
 
-        depth = rand_uniform(self.depth)
-
-        extra_arc_num = int(task_num * self.extra_arc_ratio)
+        extra_arc_num = int(self.task_num * self.extra_arc_ratio)
 
         ### 2. Classify Task by randomly-select level
         level_arr = []
-        for i in range(depth):
+        for i in range(self.depth):
             level_arr.append([])
 
         # put start nodes in level 0
-        start_node_num = rand_uniform(self.start_node)
-        for i in range(start_node_num):
+        for i in range(self.start_node):
             level_arr[0].append(i)
             self.task_set[i].level = 0
         
         # Each level must have at least one node
-        for i in range(1, depth):
-            level_arr[i].append(start_node_num + i - 1)
-            self.task_set[start_node_num+i-1].level = i
+        for i in range(1, self.depth):
+            level_arr[i].append(self.start_node + i - 1)
+            self.task_set[self.start_node+i-1].level = i
 
         # put other nodes in other level randomly
-        for i in range(start_node_num + depth - 1, task_num):
-            level = randint(1, depth-1)
+        for i in range(self.start_node + self.depth - 1, self.task_num):
+            level = randint(1, self.depth-1)
             self.task_set[i].level = level
             level_arr[level].append(i)
 
         ### 3-(A). When edge_num_constraint is True
         if self.edge_num_constraint:
             ### make arc for first level
-            for level in range(0, depth-1):
+            for level in range(0, self.depth-1):
                 for task_idx in level_arr[level]:
                     ob_num = rand_uniform(self.outbound_num)
 
@@ -123,7 +119,7 @@ class DAGGen(object):
         ### 3-(B). When edge_num_constraint is False
         else:
             ### make arc from last level
-            for level in range(depth-1, 0, -1):
+            for level in range(self.depth-1, 0, -1):
                 for task_idx in level_arr[level]:
                     parent_idx = level_arr[level-1][randint(0, len(level_arr[level - 1])-1)]
 
@@ -135,8 +131,8 @@ class DAGGen(object):
                 arc_added_flag = False
                 failCnt = 0
                 while not arc_added_flag and failCnt < 10:
-                    task1_idx = randint(0, task_num-1)
-                    task2_idx = randint(0, task_num-1)
+                    task1_idx = randint(0, self.task_num-1)
+                    task2_idx = randint(0, self.task_num-1)
 
                     if self.task_set[task1_idx].level < self.task_set[task2_idx].level and task2_idx not in self.task_set[task1_idx].child:
                         self.task_set[task1_idx].child.append(task2_idx)
