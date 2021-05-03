@@ -9,7 +9,7 @@ python3 dag_gen.py
 
 ### Parameter
 
-* `task_num` ([mean, dev]): set the number of tasks between `[mean-dev, mean+dev]`
+* `node_num` ([mean, dev]): set the number of nodes between `[mean-dev, mean+dev]`
 * `depth` ([mean, dev]): set the depth of DAG between `[mean-dev, mean+dev]`
 * `start_node` ([mean, dev]): set the number of start node (entry node) between `[mean-dev, mean+dev]`
 * `exec_t` ([mean, dev]): set the execution time of task between `[mean-dev, mean+dev]`

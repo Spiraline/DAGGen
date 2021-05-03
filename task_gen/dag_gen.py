@@ -47,7 +47,7 @@ class Task(object):
 
 class DAGGen(object):
     def __init__(self, **kwargs):
-        self.task_num = rand_uniform(kwargs.get('task_num', [10, 3]))
+        self.node_num = rand_uniform(kwargs.get('node_num', [10, 3]))
         self.depth = rand_uniform(kwargs.get('depth', [3.5, 0.5]))
         self.exec_t = kwargs.get('exec_t', [50.0, 30.0])
         self.start_node = rand_uniform(kwargs.get('start_node', [2, 1]))
@@ -63,7 +63,7 @@ class DAGGen(object):
         self.task_set = []
 
         ### 1. Initialize Task
-        for i in range(self.task_num):
+        for i in range(self.node_num):
             task_param = {
                 "name" : "node" + str(i),
                 "exec_t" : rand_uniform(self.exec_t)
@@ -71,7 +71,7 @@ class DAGGen(object):
 
             self.task_set.append(Task(**task_param))
 
-        extra_arc_num = int(self.task_num * self.extra_arc_ratio)
+        extra_arc_num = int(self.node_num * self.extra_arc_ratio)
 
         ### 2. Classify Task by randomly-select level
         level_arr = []
@@ -89,7 +89,7 @@ class DAGGen(object):
             self.task_set[self.start_node+i-1].level = i
 
         # put other nodes in other level randomly
-        for i in range(self.start_node + self.depth - 1, self.task_num):
+        for i in range(self.start_node + self.depth - 1, self.node_num):
             level = randint(1, self.depth-1)
             self.task_set[i].level = level
             level_arr[level].append(i)
@@ -131,8 +131,8 @@ class DAGGen(object):
                 arc_added_flag = False
                 failCnt = 0
                 while not arc_added_flag and failCnt < 10:
-                    task1_idx = randint(0, self.task_num-1)
-                    task2_idx = randint(0, self.task_num-1)
+                    task1_idx = randint(0, self.node_num-1)
+                    task2_idx = randint(0, self.node_num-1)
 
                     if self.task_set[task1_idx].level < self.task_set[task2_idx].level and task2_idx not in self.task_set[task1_idx].child:
                         self.task_set[task1_idx].child.append(task2_idx)
@@ -163,7 +163,7 @@ class DAGGen(object):
 
 if __name__ == "__main__":
     dag_param_1 = {
-        "task_num" : [20, 0],
+        "node_num" : [20, 0],
         "depth" : [4.5, 0.5],
         "exec_t" : [50.0, 30.0],
         "start_node" : [2, 1],
@@ -171,7 +171,7 @@ if __name__ == "__main__":
     }
 
     dag_param_2 = {
-        "task_num" : [20, 0],
+        "node_num" : [20, 0],
         "depth" : [4.5, 0.5],
         "exec_t" : [50.0, 30.0],
         "start_node" : [2, 0],
