@@ -4,9 +4,9 @@ def avg(L):
     return sum(L) / len(L)
 
 class ClassicBound(object):
-    def __init__(self, task_set):
+    def __init__(self, task_set, core_num=1):
         self.task_set = task_set
-        self.core_num = 1
+        self.core_num = core_num
         self.critical_workload = 0.0
         self.total_workload = 0.0
 
