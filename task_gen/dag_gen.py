@@ -32,8 +32,8 @@ class Task(object):
         # if self.isLeaf:
         #     res += " DL : %s" % (self.deadline)
 
-        res = "%-9s %-5.1f %40s %40s" \
-            % ('[' + self.name + ']', self.exec_t, self.parent, self.child)
+        res = "%-9s %-5.1f(%s) %40s %40s" \
+            % ('[' + self.name + ']', self.exec_t, self.level, self.parent, self.child)
 
         if self.isLeaf:
             res += "%7s" % (self.deadline)
@@ -51,6 +51,7 @@ class DAGGen(object):
         self.depth = rand_uniform(kwargs.get('depth', [3.5, 0.5]))
         self.exec_t = kwargs.get('exec_t', [50.0, 30.0])
         self.start_node = rand_uniform(kwargs.get('start_node', [2, 1]))
+        self.end_node = rand_uniform(kwargs.get('end_node', [2, 1]))
         self.edge_num_constraint = kwargs.get('edge_constraint', False)
 
         # Use when edge_num_constraint is True
@@ -78,19 +79,24 @@ class DAGGen(object):
         for i in range(self.depth):
             level_arr.append([])
 
-        # put start nodes in level 0
+        # put start nodes in level 0 (source node)
         for i in range(self.start_node):
             level_arr[0].append(i)
             self.task_set[i].level = 0
+
+        # put end nodes in level depth-1 (sink node)
+        for i in range(self.node_num-1, self.node_num-self.end_node-1, -1):
+            level_arr[-1].append(i)
+            self.task_set[i].level = self.depth-1
         
         # Each level must have at least one node
-        for i in range(1, self.depth):
+        for i in range(1, self.depth-1):
             level_arr[i].append(self.start_node + i - 1)
-            self.task_set[self.start_node+i-1].level = i
+            self.task_set[self.start_node + i - 1].level = i
 
         # put other nodes in other level randomly
-        for i in range(self.start_node + self.depth - 1, self.node_num):
-            level = randint(1, self.depth-1)
+        for i in range(self.start_node+self.depth-2, self.node_num-self.end_node):
+            level = randint(1, self.depth-2)
             self.task_set[i].level = level
             level_arr[level].append(i)
 
@@ -126,13 +132,27 @@ class DAGGen(object):
                     self.task_set[parent_idx].child.append(task_idx)
                     self.task_set[task_idx].parent.append(parent_idx)
 
+            ### make sure all node have child except sink node
+            for level in range(0, self.depth-1) :
+                for task_idx in level_arr[level] :
+                    if len(self.task_set[task_idx].child) == 0 :
+                        child_idx = level_arr[level+1][randint(0, len(level_arr[level+1])-1)]
+                        self.task_set[task_idx].child.append(child_idx)
+                        self.task_set[child_idx].parent.append(task_idx)
+
+            for task_idx in level_arr[self.depth-1] :
+                if len(self.task_set[task_idx].parent) == 0 :
+                    parent_idx = level_arr[self.depth-2][randint(0, len(level_arr[self.depth-2])-1)]
+                    self.task_set[parent_idx].child.append(task_idx)
+                    self.task_set[task_idx].parent.append(parent_idx)
+
             ### make extra arc
             for i in range(extra_arc_num):
                 arc_added_flag = False
                 failCnt = 0
                 while not arc_added_flag and failCnt < 10:
-                    task1_idx = randint(0, self.node_num-1)
-                    task2_idx = randint(0, self.node_num-1)
+                    task1_idx = randint(0, self.node_num-2)
+                    task2_idx = randint(0, self.node_num-2)
 
                     if self.task_set[task1_idx].level < self.task_set[task2_idx].level and task2_idx not in self.task_set[task1_idx].child:
                         self.task_set[task1_idx].child.append(task2_idx)
@@ -144,7 +164,7 @@ class DAGGen(object):
                         arc_added_flag = True
                     
                     failCnt += 1
-        
+
         ### 5. set deadline ( exec_t avg * (level + 1)) * 2
         for task in self.task_set:
             task.child.sort()
@@ -163,11 +183,12 @@ class DAGGen(object):
 
 if __name__ == "__main__":
     dag_param_1 = {
-        "node_num" : [20, 0],
+        "node_num" : [10, 5],
         "depth" : [4.5, 0.5],
         "exec_t" : [50.0, 30.0],
         "start_node" : [2, 1],
-        "extra_arc_ratio" : 0.4
+        "end_node" : [2, 1],
+        "extra_arc_ratio" : 0.4,
     }
 
     dag_param_2 = {
@@ -175,6 +196,7 @@ if __name__ == "__main__":
         "depth" : [4.5, 0.5],
         "exec_t" : [50.0, 30.0],
         "start_node" : [2, 0],
+        "end_node" : [2, 0],
         "edge_constraint" : True,
         "outbound_num" : [2, 0]
     }
@@ -182,4 +204,5 @@ if __name__ == "__main__":
     dag = DAGGen(**dag_param_1)
 
     print(dag)
+    print(dag.start_node, dag.end_node, dag.depth)
 
