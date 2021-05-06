@@ -43,7 +43,6 @@ class NaiveBound(object) :
                 indegree[v] -= 1
                 if indegree[v] == 0 :
                     task_queue.append(self.task_set[v])    
-
         cp = []
         cv = argmax(distance)
 
@@ -80,7 +79,6 @@ class NaiveBound(object) :
                 for v in inter(self.task_set[vertex].child, vl) :
                     if not visited[v] :
                         queue.append(v)
-
 
         # finish time
         for i in range(cp_len, 1, -1) :
@@ -132,7 +130,7 @@ class NaiveBound(object) :
         critical_path = self.calculate_critical_path(vertex_list)
         # print(vertex_list, critical_path)
         group = self.set_exec_range(critical_path, vertex_list)
-        
+
         response_time = 0
         remain = [self.task_set[cp].exec_t for cp in critical_path]
         assigned = [[] for _ in critical_path]
@@ -150,8 +148,8 @@ class NaiveBound(object) :
             for start in range(theta, 0, -1) :
                 if group_rt[start][theta] != 0 :
                     remain[theta] -= group_rt[start][theta]
-                    group_rt[start][theta] = 0
                     assigned[theta].append(group_rt[start][theta])
+                    group_rt[start][theta] = 0
 
             # could be assigned
             for start, end in [(x, y) for y in range(theta+1, len(critical_path)) for x in range(len(critical_path), theta, -1)] :
@@ -162,9 +160,8 @@ class NaiveBound(object) :
                     break
 
                 remain[theta] -= group_rt[start][end]
-                group_rt[start][end] = 0
                 assigned[theta].append(group_rt[start][end])
-    
+                group_rt[start][end] = 0
         
         # unassigned group
         for i in range(len(critical_path)+1) :
@@ -172,11 +169,12 @@ class NaiveBound(object) :
                 if group_rt[i][j] != 0 :
                     bestfit = argmax(remain[i:j+1])
                     remain[bestfit+i] -= group_rt[i][j]
-                    group_rt[i][j] = 0
                     assigned[bestfit+i].append(group_rt[i][j])
+                    group_rt[i][j] = 0
 
         # accumulate response time for all theta
         for i, c in enumerate(critical_path) :
+            # print(self.task_set[c].exec_t, assigned[i])
             response_time += max(self.task_set[c].exec_t, sum(assigned[i])) # theta value or hidden terms
 
         return response_time
