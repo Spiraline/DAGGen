@@ -204,5 +204,3 @@ if __name__ == "__main__":
     dag = DAGGen(**dag_param_1)
 
     print(dag)
-    print(dag.start_node, dag.end_node, dag.depth)
-

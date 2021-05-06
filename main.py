@@ -2,6 +2,7 @@ import argparse
 import os
 
 from task_gen.dag_gen import Task, DAGGen
+from task_gen.dag_file import DAGFile
 from sched.classic import ClassicBound
 from sched.naive import NaiveBound
 
