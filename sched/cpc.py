@@ -54,7 +54,17 @@ class CPCBound:
         self.generate_interference_group()
         self.generate_finish_time_bound()
         self.get_alpha_beta()
-        self.get_response_time_bound()
+
+        # print("provider_group: ", self.provider_group)
+        # print("consumer_group (F): ", self.consumer_group)
+        # print("next_provider_consumer_group (G): ", self.next_provider_consumer_group)
+
+        # print("finish_time_provider_arr: ", self.finish_time_provider_arr)
+        # print("finish_time_consumer_arr: ", self.finish_time_consumer_arr)
+
+        # print("alpha_arr: ", self.alpha_arr)
+        # print("beta_arr: ", self.beta_arr)
+        self.calculate_bound()
 
     def __str__(self):
         return ''
@@ -328,7 +338,7 @@ class CPCBound:
     def check_budget_bound(self, budget, wcet):
         print(self.task_set)
 
-    def get_response_time_bound(self):
+    def calculate_bound(self):
         sum_response_time = 0
         for theta_i in range(len(self.provider_group)):
             length_i = 0

@@ -20,7 +20,8 @@ class DAGFile(object):
         for i in range(self.node_num):
             task_param = {
                 "name" : "node" + str(i),
-                "exec_t" : exec_t[i]
+                "exec_t" : exec_t[i],
+                "level": -1,
             }
 
             self.task_set.append(Task(**task_param))
@@ -39,11 +40,21 @@ class DAGFile(object):
         for i, task in enumerate(self.task_set) :
             if len(task.parent) == 0 :
                 self.start_node.append(i)
+                self.task_set[i].level = 0
 
             if len(task.child) == 0 :
                 self.task_set[i].isLeaf = True
                 self.end_node.append(i)
                 self.task_set[i].deadline = 0
+
+        ### 4. Assign level (depth from source to sink)
+        queue = self.start_node.copy()
+        while not len(queue) == 0 :
+            q = queue.pop(0)
+            for qq in self.task_set[q].child :
+                self.task_set[qq].level = max(self.task_set[qq].level, self.task_set[q].level+1)
+                queue.append(qq)
+
 
     def __str__(self):
         print("%-9s %-5s %39s %40s %8s" % ('name', 'exec_t', 'parent node', 'child node', 'deadline'))
