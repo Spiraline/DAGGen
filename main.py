@@ -34,6 +34,6 @@ if __name__ == "__main__":
 
         classic_bound = classic.calculate_bound()
         cpc_bound = cpc_model.calculate_bound()
-
+        cpc_model.setting_theta(0)
         print("classic bound: ", classic_bound)
         print("cpc bound: ", cpc_bound)
