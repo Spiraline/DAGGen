@@ -35,6 +35,7 @@ class Node(object):
 
 class CPCBound:
     def __init__(self, task_set, core_num):
+        self.self_looping_idx = 0
         self.task_set = task_set # G = (V,E)
         self.node_set =[]
         self.core_num = core_num # m
@@ -57,15 +58,16 @@ class CPCBound:
         self.generate_finish_time_bound()
         self.get_alpha_beta()
 
-        # print("provider_group: ", self.provider_group)
-        # print("consumer_group (F): ", self.consumer_group)
-        # print("next_provider_consumer_group (G): ", self.next_provider_consumer_group)
+        print("provider_group: ", self.provider_group)
+        print("consumer_group (F): ", self.consumer_group)
+        print("next_provider_consumer_group (G): ", self.next_provider_consumer_group)
+        print("critical_path", self.critical_path)
 
-        # print("finish_time_provider_arr: ", self.finish_time_provider_arr)
-        # print("finish_time_consumer_arr: ", self.finish_time_consumer_arr)
+        print("finish_time_provider_arr: ", self.finish_time_provider_arr)
+        print("finish_time_consumer_arr: ", self.finish_time_consumer_arr)
 
-        # print("alpha_arr: ", self.alpha_arr)
-        # print("beta_arr: ", self.beta_arr)
+        print("alpha_arr: ", self.alpha_arr)
+        print("beta_arr: ", self.beta_arr)
         self.calculate_bound()
 
     def __str__(self):
@@ -306,7 +308,7 @@ class CPCBound:
                 elif self.node_set[v_j].finish_time > self.finish_time_provider_arr[theta_i] and self.node_set[v_j].finish_time - self.node_set[v_j].exec_t < self.finish_time_provider_arr[theta_i]:
                     graph_b.append(v_j)
 
-            # print(graph_a, graph_b)
+            # print(theta_i,graph_a, graph_b)
             sum_a = 0
             sum_b = 0
             for a in graph_a:
@@ -327,7 +329,7 @@ class CPCBound:
                     longest_local_path.append(idx)
             if longest_local_path:
                 longest_local_path = self.get_longest_path(longest_local_path, theta_i, self.finish_time_provider_arr[theta_i])
-            # print(longest_local_path)
+            # print(theta_i, longest_local_path)
 
             beta_i = 0
             for idx in longest_local_path:
@@ -373,12 +375,12 @@ class CPCBound:
 
     def get_longest_path(self, longest_local_path, i, f_theta_i):
         all_local_path = self.get_all_path_of_group(self.consumer_group[i])
-        # print(all_local_path)
+        # print(i, all_local_path)
         pred_candidate = []
         if longest_local_path:
             end_node_idx = longest_local_path[0]
 
-            # print(self.node_set[end_node_idx].pred)
+            # print(i, self.node_set[end_node_idx].pred)
             for pred_idx in self.node_set[end_node_idx].pred:
                 if self.node_set[pred_idx].finish_time > f_theta_i:
                     pred_candidate.append(pred_idx)
@@ -416,13 +418,15 @@ class CPCBound:
             for idx in max_path:
                 if self.node_set[idx].finish_time > f_theta_i:
                     loc_path_after.append(idx)
-            #print(loc_path_after)
+            # print(i, loc_path_after)
             if end_node_idx in loc_path_after:
                 longest_local_path = loc_path_after.copy()
                 # print("long", longest_local_path)
             else:
                 longest_local_path = loc_path_after.copy()
                 longest_local_path.append(end_node_idx)
+        if self.node_set[end_node_idx].finish_time <= f_theta_i:
+            longest_local_path = []
         return longest_local_path
 
     def assign_priority(self, graph):
@@ -433,7 +437,7 @@ class CPCBound:
         print(self.task_set)
 
     def budget_bound_analysis(self):
-        print(self.task_set)
+        print(self.self_looping_idx)
 
     def check_budget_bound(self, budget, wcet):
         print(self.task_set)
@@ -441,6 +445,7 @@ class CPCBound:
     def calculate_bound(self):
         sum_response_time = 0
         for theta_i in range(len(self.provider_group)):
+            # print(theta_i)
             length_i = 0
             for idx in self.provider_group[theta_i]:
                 length_i += self.node_set[idx].exec_t
@@ -452,5 +457,69 @@ class CPCBound:
             beta_i = self.beta_arr[theta_i]
 
             response_time_i = length_i + math.ceil((workload_i - length_i - alpha_i - beta_i)/self.core_num) + beta_i
+            # print(theta_i, length_i, workload_i, alpha_i, beta_i, response_time_i)
             sum_response_time += response_time_i
-            return sum_response_time
+        return sum_response_time
+
+    def setting_theta(self, self_looping_idx):
+        self.self_looping_idx = self_looping_idx
+
+        idx_in_provider = 0
+        splited = []
+        for provider in self.provider_group:
+            if self.self_looping_idx in provider:
+                idx_in_provider = provider.index(self.self_looping_idx)
+                origin = provider
+                if idx_in_provider == provider[-1]:
+                    # do not slice the provider, we do not have to
+                    break
+                else:
+                    self_looping_provider = provider[:idx_in_provider + 1]
+                    later_provider = provider[idx_in_provider + 1:]
+                    splited.append(self_looping_provider)
+                    splited.append(later_provider)
+                    p_idx = self.provider_group.index(provider)
+                    self.provider_group.remove(provider)
+                    self.provider_group.insert(p_idx, later_provider)
+                    self.provider_group.insert(p_idx, self_looping_provider)
+        self.update_cpc_model()
+        self.generate_interference_group()
+        self.generate_finish_time_bound()
+        self.get_alpha_beta()
+        self.calculate_bound()
+        print("provider_group", self.provider_group)
+        print("consumer_group (F)", self.consumer_group)
+        print("next_provider_consumer_group (G)", self.next_provider_consumer_group)
+
+    def update_cpc_model(self):
+        non_critical_nodes = self.non_critical_nodes.copy()
+        self.consumer_group = []
+        self.next_provider_consumer_group = []
+        for idx in range(len(self.provider_group)):
+            if idx < len(self.provider_group) - 1:
+                provider = self.provider_group[idx]
+                next_provider = self.provider_group[idx + 1]
+                self.node_set[provider[0]].isProvider = True
+                self.node_set[provider[0]].consumer_group = list(set(self.node_set[next_provider[0]].anc) & set(non_critical_nodes))
+                self.consumer_group.append(self.node_set[provider[0]].consumer_group.copy())
+                next_provider_consumer_group = []
+                for v_j in self.node_set[provider[0]].consumer_group:
+                    node = self.node_set[v_j]
+                    union = list(set(node.anc) | set(node.desc))
+                    node_set = []
+                    for node in self.node_set:
+                        if int(node.vid) not in node_set and int(node.vid) != v_j:
+                            node_set.append(int(node.vid))
+                    concurrent_nodes = list(set(node_set) - set(union))
+                    intersection = list(set(concurrent_nodes) & set(non_critical_nodes))
+                    next_provider_consumer_group = list(set(next_provider_consumer_group) | set(intersection))
+                    # print(v_j," ", union, concurrent_nodes, intersection, next_provider_consumer_group)
+                next_provider_consumer_group = list(set(next_provider_consumer_group) - set(self.node_set[provider[0]].consumer_group))
+                self.node_set[provider[0]].consumer_next_provider_group = next_provider_consumer_group.copy()
+                non_critical_nodes = list(set(non_critical_nodes) - set(self.node_set[provider[0]].consumer_group))
+                self.next_provider_consumer_group.append(next_provider_consumer_group.copy())
+                # print("F(theta_i)", self.node_set[provider[0]].consumer_group)
+                # print("G(theta_i)", self.node_set[provider[0]].consumer_next_provider_group)
+            else:
+                self.consumer_group.append([])
+                self.next_provider_consumer_group.append([])
