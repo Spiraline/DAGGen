@@ -327,7 +327,7 @@ class CPCBound:
                     longest_local_path.append(idx)
             if longest_local_path:
                 longest_local_path = self.get_longest_path(longest_local_path, theta_i, self.finish_time_provider_arr[theta_i])
-            print(longest_local_path)
+            # print(longest_local_path)
 
             beta_i = 0
             for idx in longest_local_path:
@@ -336,6 +336,7 @@ class CPCBound:
                 else:
                     beta_i += self.node_set[idx].finish_time - self.finish_time_provider_arr[theta_i]
             self.beta_arr.append(beta_i)
+
     def get_all_path_of_group(self, group):
         all_path = []
         for idx in group:

@@ -26,17 +26,14 @@ if __name__ == "__main__":
 
         Task.idx = 0
         # DAG = DAGGen(**dag_param_1)
-        DAG = DAGFile('./input1.txt')
+        DAG = DAGFile('./input2.txt')
         print(DAG)
 
-        classic = ClassicBound(DAG.task_set, core_num=2)
-        naive = NaiveBound(DAG.task_set, core_num=2)
-        cpc_model = CPCBound(DAG.task_set, core_num=2)
+        classic = ClassicBound(DAG.task_set, core_num=3)
+        cpc_model = CPCBound(DAG.task_set, core_num=3)
 
         classic_bound = classic.calculate_bound()
-        naive_bound = naive.calculate_bound()
         cpc_bound = cpc_model.calculate_bound()
 
         print("classic bound: ", classic_bound)
-        print("naive bound: ", naive_bound)
         print("cpc bound: ", cpc_bound)
