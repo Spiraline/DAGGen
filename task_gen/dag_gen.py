@@ -17,13 +17,13 @@ class Task(object):
         Task.idx += 1
         self.name = kwargs.get('name', '')
         self.exec_t = kwargs.get('exec_t', 30.0)
-        self.level = kwargs.get('level', -1)
 
         # Assigned after DAGGen
         self.parent = []
         self.child = []
         self.isLeaf = False
         self.deadline = -1
+        self.level = -1
 
     def __str__(self):
         # res = "%-9s exec_t : %.1f, parent : %20s child : %30s" \
