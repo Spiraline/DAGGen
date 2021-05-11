@@ -20,6 +20,7 @@ class Node(object):
         self.consumer_next_provider_group = []  # G(theta_i)
         self.interference_group = []
         self.concurrent_group = []
+        self.non_critical_group = []
         self.isSink = kwargs.get('isLeaf', False)
         self.isSource = False
         self.finish_time = -1
@@ -42,6 +43,7 @@ class CPCBound:
         self.complete_paths = [] #
         self.provider_group = []
         self.consumer_group = []
+        self.local_path_group = []
         self.next_provider_consumer_group = []
         self.total_workload = [] # W_i
         self.finish_time_provider_arr = []
@@ -126,6 +128,20 @@ class CPCBound:
             return descendant
         else:
             return succ
+
+    def find_path(self, path, group, path_list):
+        current_node = self.node_set[path[-1]]
+        if current_node.succ:
+            for suc in current_node.succ:
+                if suc in group:
+                    sub_path = []
+                    sub_path += path
+                    sub_path.append(suc)
+                    self.find_path(sub_path, group, path_list)
+                else:
+                    path_list.append(path)
+        else:
+            path_list.append(path)
 
     def get_critical_path(self):
         # set critical path first node as node with level 0
@@ -218,15 +234,21 @@ class CPCBound:
             node_set = []
             for inter in self.node_set:
                 if int(inter.vid) not in node_set and int(inter.vid) != int(node.vid):
-                    node_set.append(int(node.vid))
+                    node_set.append(int(inter.vid))
             node.concurrent_group = list(set(node_set) - set(union))
-            non_critical_group = list(set(non_critical_group) & set(node.concurrent_group))
+            node.non_critical_group = list(set(non_critical_group) & set(node.concurrent_group))
+            # print(node.vid, node.concurrent_group, node.non_critical_group)
             anc_interference_group = []
             for idx in node.anc:
                 anc_interference_group = list(set(anc_interference_group) | set(self.node_set[idx].interference_group))
-            node.interference_group = list(set(non_critical_group) & set(anc_interference_group))
+                #print(node.vid, node.anc, idx, anc_interference_group, set(self.node_set[idx].interference_group))
+
+            non_anc_interference_group = list(set(node.concurrent_group) - set(anc_interference_group))
+            node.interference_group = list(set(non_critical_group) & set(non_anc_interference_group))
+            # print(node.vid, node.concurrent_group, anc_interference_group, non_anc_interference_group, node.interference_group)
 
     def generate_finish_time_bound(self):
+        # source node's finish time is 0 + its exec_t
         for node in self.node_set:
             if node.level == 0:
                 node.finish_time = node.exec_t
@@ -237,8 +259,10 @@ class CPCBound:
             for idx in node.pred:
                 pred_finish.append(self.node_set[idx].finish_time)
             interference = 0
-            concurrent_size = len(list(set(node.concurrent_group) - set(self.critical_path)))
-            if int(node.vid) in self.critical_path or concurrent_size < self.core_num - 1:
+            non_critical_concurrent_group = list(set(node.concurrent_group) - set(self.critical_path))
+            all_path_group = self.get_all_path_of_group(non_critical_concurrent_group)
+            # print(node.vid, all_path_group)
+            if (int(node.vid) in self.critical_path) or len(all_path_group) < self.core_num - 1:
                 interference = 0
             else:
                 sum = 0
@@ -249,6 +273,7 @@ class CPCBound:
 
             if pred_finish:
                 node.finish_time = node.exec_t + max(pred_finish) + interference
+            # print(node.vid, node.finish_time)
 
     def get_alpha_beta(self):
         self.finish_time_provider_arr = []
@@ -275,11 +300,13 @@ class CPCBound:
             graph_a = []
             graph_b = []
             for v_j in list_f_g_union:
+                # print(self.node_set[v_j].finish_time, self.finish_time_provider_arr[theta_i])
                 if self.node_set[v_j].finish_time <= self.finish_time_provider_arr[theta_i]:
                     graph_a.append(v_j)
                 elif self.node_set[v_j].finish_time > self.finish_time_provider_arr[theta_i] and self.node_set[v_j].finish_time - self.node_set[v_j].exec_t < self.finish_time_provider_arr[theta_i]:
                     graph_b.append(v_j)
 
+            # print(graph_a, graph_b)
             sum_a = 0
             sum_b = 0
             for a in graph_a:
@@ -288,15 +315,19 @@ class CPCBound:
             for b in graph_b:
                 sum_b += self.finish_time_provider_arr[theta_i] - (self.node_set[b].finish_time - self.node_set[b].exec_t)
             alpha_i = sum_a + sum_b
+            # print(alpha_i)
             self.alpha_arr.append(alpha_i)
 
             # recursively search predecessor node which contribute to the longest path
             longest_local_path = []
+            # print(self.consumer_group)
             for idx in self.consumer_group[theta_i]:
+                # print(idx, self.node_set[idx].finish_time, self.finish_time_consumer_arr[theta_i])
                 if self.node_set[idx].finish_time == self.finish_time_consumer_arr[theta_i]:
                     longest_local_path.append(idx)
-            self.get_longest_path(longest_local_path, self.finish_time_provider_arr[theta_i])
-
+            if longest_local_path:
+                longest_local_path = self.get_longest_path(longest_local_path, theta_i, self.finish_time_provider_arr[theta_i])
+            print(longest_local_path)
 
             beta_i = 0
             for idx in longest_local_path:
@@ -305,25 +336,93 @@ class CPCBound:
                 else:
                     beta_i += self.node_set[idx].finish_time - self.finish_time_provider_arr[theta_i]
             self.beta_arr.append(beta_i)
+    def get_all_path_of_group(self, group):
+        all_path = []
+        for idx in group:
+            path_list = []
+            path = []
+            path.append(idx)
+            self.find_path(path, group, path_list)
+            if path_list:
+                # print(idx, path_list)
+                for p in path_list:
+                    if all_path:
+                        is_sub = False
+                        for a in all_path:
+                            if self.is_sub_list(p, a):
+                                is_sub = True
+                                break
+                        if not is_sub:
+                            all_path.append(p)
+                    else:
+                        all_path.append(p)
+        return all_path
 
-    def get_longest_path(self, path, f_theta_i):
+    def is_sub_list(self, sub_list, super_list):
+        unique_elements = set(sub_list)
+        for e in unique_elements:
+            if sub_list.count(e) > super_list.count(e):
+                return False
+        # It is sublist
+        return True
+
+    def get_local_path(self, consumer_group):
+        # a provider has local path in its consumer group F(theta_i)
+        print(consumer_group)
+
+    def get_longest_path(self, longest_local_path, i, f_theta_i):
+        all_local_path = self.get_all_path_of_group(self.consumer_group[i])
+        # print(all_local_path)
         pred_candidate = []
-        if path:
-            idx = path[0]
-            for pred_idx in self.node_set[idx].pred:
+        if longest_local_path:
+            end_node_idx = longest_local_path[0]
+
+            # print(self.node_set[end_node_idx].pred)
+            for pred_idx in self.node_set[end_node_idx].pred:
                 if self.node_set[pred_idx].finish_time > f_theta_i:
                     pred_candidate.append(pred_idx)
 
+        loc_path_after = []
+        local_path = []
         if pred_candidate:
+            # print(pred_candidate)
             max_f = 0
             max_i = 0
             for i in pred_candidate:
                 if self.node_set[i].finish_time > max_f:
                     max_f = self.node_set[i].finish_time
                     max_i = i
-            path.append(max_i)
-            self.get_longest_path(path, f_theta_i)
 
+            for path in all_local_path:
+                if max_i in path:
+                    local_path.append(path)
+            max_dist = 0
+            max_path = []
+
+            for path in local_path:
+                # print(path)
+                if len(path) > 1:
+                    dist = 0
+                    for idx in path:
+                        dist += self.node_set[idx].exec_t
+                    if dist > max_dist:
+                        max_dist = dist
+                        max_path = path
+                else:
+                    max_dist = self.node_set[path[0]].exec_t
+                    max_path = path
+            # print(max_path)
+            for idx in max_path:
+                if self.node_set[idx].finish_time > f_theta_i:
+                    loc_path_after.append(idx)
+            #print(loc_path_after)
+            if end_node_idx in loc_path_after:
+                longest_local_path = loc_path_after.copy()
+                # print("long", longest_local_path)
+            else:
+                longest_local_path = loc_path_after.copy()
+                longest_local_path.append(end_node_idx)
+        return longest_local_path
 
     def assign_priority(self, graph):
         for i in range(len(self.task_set)):
