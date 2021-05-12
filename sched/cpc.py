@@ -205,7 +205,8 @@ class CPCBound:
                 self.node_set[provider[0]].consumer_group = list(set(self.node_set[next_provider[0]].anc) & set(non_critical_nodes))
                 self.consumer_group.append(self.node_set[provider[0]].consumer_group.copy())
                 next_provider_consumer_group = []
-                for v_j in self.node_set[provider[0]].consumer_group:
+                # for getting G(theta)
+                for v_j in self.provider_group[idx]:
                     node = self.node_set[v_j]
                     union = list(set(node.anc) | set(node.desc))
                     node_set = []
@@ -214,6 +215,7 @@ class CPCBound:
                             node_set.append(int(node.vid))
                     concurrent_nodes = list(set(node_set) - set(union))
                     intersection = list(set(concurrent_nodes) & set(non_critical_nodes))
+                    difference = list(set(intersection) - set(self.node_set[provider[0]].consumer_group))
                     next_provider_consumer_group = list(set(next_provider_consumer_group) | set(intersection))
                     # print(v_j," ", union, concurrent_nodes, intersection, next_provider_consumer_group)
                 next_provider_consumer_group = list(set(next_provider_consumer_group) - set(self.node_set[provider[0]].consumer_group))
