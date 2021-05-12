@@ -34,7 +34,7 @@ class Node(object):
 
 
 class CPCBound:
-    def __init__(self, task_set, core_num):
+    def __init__(self, task_set, core_num=4):
         self.self_looping_idx = 0
         self.task_set = task_set # G = (V,E)
         self.node_set =[]
@@ -58,16 +58,16 @@ class CPCBound:
         self.generate_finish_time_bound()
         self.get_alpha_beta()
 
-        print("provider_group: ", self.provider_group)
-        print("consumer_group (F): ", self.consumer_group)
-        print("next_provider_consumer_group (G): ", self.next_provider_consumer_group)
-        print("critical_path", self.critical_path)
+        # print("provider_group: ", self.provider_group)
+        # print("consumer_group (F): ", self.consumer_group)
+        # print("next_provider_consumer_group (G): ", self.next_provider_consumer_group)
+        # print("critical_path", self.critical_path)
 
-        print("finish_time_provider_arr: ", self.finish_time_provider_arr)
-        print("finish_time_consumer_arr: ", self.finish_time_consumer_arr)
+        # print("finish_time_provider_arr: ", self.finish_time_provider_arr)
+        # print("finish_time_consumer_arr: ", self.finish_time_consumer_arr)
 
-        print("alpha_arr: ", self.alpha_arr)
-        print("beta_arr: ", self.beta_arr)
+        # print("alpha_arr: ", self.alpha_arr)
+        # print("beta_arr: ", self.beta_arr)
         self.calculate_bound()
 
     def __str__(self):
@@ -373,7 +373,8 @@ class CPCBound:
 
     def get_local_path(self, consumer_group):
         # a provider has local path in its consumer group F(theta_i)
-        print(consumer_group)
+        # print(consumer_group)
+        pass
 
     def get_longest_path(self, longest_local_path, i, f_theta_i):
         all_local_path = self.get_all_path_of_group(self.consumer_group[i])
@@ -471,8 +472,7 @@ class CPCBound:
         for provider in self.provider_group:
             if self.self_looping_idx in provider:
                 idx_in_provider = provider.index(self.self_looping_idx)
-                origin = provider
-                if idx_in_provider == provider[-1]:
+                if self_looping_idx == provider[-1]:
                     # do not slice the provider, we do not have to
                     break
                 else:
@@ -489,9 +489,9 @@ class CPCBound:
         self.generate_finish_time_bound()
         self.get_alpha_beta()
         self.calculate_bound()
-        print("provider_group", self.provider_group)
-        print("consumer_group (F)", self.consumer_group)
-        print("next_provider_consumer_group (G)", self.next_provider_consumer_group)
+        # print("provider_group", self.provider_group)
+        # print("consumer_group (F)", self.consumer_group)
+        # print("next_provider_consumer_group (G)", self.next_provider_consumer_group)
 
     def update_cpc_model(self):
         non_critical_nodes = self.non_critical_nodes.copy()
