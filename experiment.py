@@ -179,7 +179,7 @@ if __name__ == '__main__' :
             else :
                 loop_count[1] = cpc_end
 
-            if any([l == 0 for l in loop_count]) :
+            if any([l == 1 for l in loop_count]) :
                 print("Countinued - Non-feasible classic({}, {}) | CPC({}, {})".format(classic_bound, classic_bbound, cpc_bound, cpc_bbound))
                 continue
 
