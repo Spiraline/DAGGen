@@ -43,7 +43,7 @@ if __name__ == '__main__' :
     parser.add_argument('--function_std', type=float, help='variance for score function', default=0.1)
     parser.add_argument('--acceptance', type=float, help='Acceptance bar for score function', default=0.9)
 
-    parser.add_argument('--base', type=list, help='list for value of base [small, middle, large]', default=[15, 30, 45])
+    parser.add_argument('--base', type=str, help='list for value of base [small, middle, large]', default='15,30,45')
     parser.add_argument('--utilization', type=float, help='(avg execution time * node #) / (deadline * cpu #)', default=0.3)
     parser.add_argument('--dangling', type=float, help='dangling DAG node # / total node #', default=0.1)
     args = parser.parse_args()
@@ -65,7 +65,7 @@ if __name__ == '__main__' :
     else :
         raise NotImplementedError
 
-    base_small, base_middle, base_large = args.base
+    base_small, base_middle, base_large = [int(b) for b in args.base.split(",")]
 
     ### test
     dag_param = {
@@ -87,15 +87,16 @@ if __name__ == '__main__' :
 
     # file_name = "ratio_{}.txt".format(int(float(args.dangling)*100))
     file_name = "utilization_{}.txt".format(int(float(args.utilization)*100))
-
+    # file_name = 'experiment1.txt'
     f = open(file_name, 'w')
+
     j = 0
     while j < test_size :
         try :
             Task.idx = 0
             
             dag, cp, sl_idx = SelfLoopingDag(dag_param, dangling_num)
-            dag.backup = args.node_avg * math.ceil(len(dag.dangling_dag)/4)
+            dag.backup = args.node_avg * math.ceil(len(dag.dangling_dag)/8)
 
             classic = ClassicBound(dag.task_set, cpu_num)
             classic_b = ClassicBackup(dag, cpu_num)
@@ -167,10 +168,10 @@ if __name__ == '__main__' :
                 if cpc_end - start <= 1 :
                     break
                 
-            cpc.task_set[sl_idx].exec_t = cpc_end * sl_exec_t
+            cpc.node_set[sl_idx].exec_t = cpc_end * sl_exec_t
             cpc_bound = cpc.calculate_bound()
 
-            cpc_b.task_set[sl_idx].exec_t = cpc_end * sl_exec_t
+            cpc_b.node_set[sl_idx].exec_t = cpc_end * sl_exec_t
             cpc_bbound = cpc_b.calculate_bound()
 
             if deadline < max(cpc_bound, cpc_bbound) :
@@ -183,7 +184,7 @@ if __name__ == '__main__' :
                 continue
 
             print(">[{}] {} {} | deadline: {}".format(j, loop_count[0], loop_count[1], deadline))
-            # f.write("{},{},{},{},{}".format(func_count2score(loop_count[0]), func_count2score(loop_count[1]), func_count2score(base_small), func_count2score(base_middle), func_count2score(base_large)))
+            # f.write("{},{},{},{},{}\n".format(func_count2score(loop_count[0]), func_count2score(loop_count[1]), func_count2score(base_small), func_count2score(base_middle), func_count2score(base_large)))
 
             ### makespan for classic and CPC
             s0, m0 = check_count(dag, loop_count[0], acceptance, deadline, cpu_num, True)
@@ -200,14 +201,14 @@ if __name__ == '__main__' :
 
             f.write("{},{},{},{},{},{},{},{},{},{}\n".format(s0, m0, s1, m1, s2, m2, s3, m3, s4, m4))
 
+            j += 1
         except KeyboardInterrupt :
             # f.close()
             sys.exit()
         except Exception as e:
             print('Continued: ', e)
             continued += 1
-
-        j += 1
+        
     ## sum up all result
     print("Error: ", continued)
     print("Unacceptable: ", score)
