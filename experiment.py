@@ -82,6 +82,7 @@ if __name__ == '__main__' :
 
     score = [0 for i in range(5)] # Classic, CPC, S, M, L
     miss = [0 for i in range(5)]
+    critical = [0 for i in range(5)]
     continued = 0
 
     # file_name = "ratio_{}.txt".format(int(float(args.dangling)*100))
@@ -193,11 +194,11 @@ if __name__ == '__main__' :
             if m0 == 1 or m1 == 1 :
                 continue
 
-            score[0] += s0 ; miss[0] += m0
-            score[1] += s1 ; miss[1] += m1
-            score[2] += s2 ; miss[2] += m2
-            score[3] += s3 ; miss[3] += m3
-            score[4] += s4 ; miss[4] += m4
+            score[0] += s0 ; miss[0] += m0 ; critical[0] += 1 if s0==1 and m0==1 else 0
+            score[1] += s1 ; miss[1] += m1 ; critical[1] += 1 if s1==1 and m1==1 else 0
+            score[2] += s2 ; miss[2] += m2 ; critical[2] += 1 if s2==1 and m2==1 else 0
+            score[3] += s3 ; miss[3] += m3 ; critical[3] += 1 if s3==1 and m3==1 else 0
+            score[4] += s4 ; miss[4] += m4 ; critical[4] += 1 if s4==1 and m4==1 else 0
 
             f.write("{},{},{},{},{},{},{},{},{},{}\n".format(s0, m0, s1, m1, s2, m2, s3, m3, s4, m4))
 
@@ -213,6 +214,7 @@ if __name__ == '__main__' :
     print("Error: ", continued)
     print("Unacceptable: ", score)
     print("miss: ", miss)
+    print("critical: ", critical)
     # f.write("{},{},{},{},{}".format(*score))
     # f.write("{},{},{},{},{}".format(*miss))
     f.close()
