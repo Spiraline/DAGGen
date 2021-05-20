@@ -1,7 +1,5 @@
 from random import randint
-import sys
-import os
-import csv
+
 
 # get [mean, stdev] and return mean +- stdev random number
 def rand_uniform(arr):
@@ -25,6 +23,10 @@ class Task(object):
         self.deadline = -1
         self.level = -1
 
+        # For SelfLoopingDag
+        self.parent_b = []
+        self.child_b = []
+
     def __str__(self):
         # res = "%-9s exec_t : %.1f, parent : %20s child : %30s" \
         #     % ('[' + self.name + ']', self.exec_t, self.parent, self.child)
@@ -47,7 +49,7 @@ class Task(object):
 
 class DAGGen(object):
     def __init__(self, **kwargs):
-        self.node_num = rand_uniform(kwargs.get('node_num', [10, 3]))
+        self.node_num = max(rand_uniform(kwargs.get('node_num', [10, 3])), 5)
         self.depth = rand_uniform(kwargs.get('depth', [3.5, 0.5]))
         self.exec_t = kwargs.get('exec_t', [50.0, 30.0])
         self.start_node = rand_uniform(kwargs.get('start_node', [2, 1]))

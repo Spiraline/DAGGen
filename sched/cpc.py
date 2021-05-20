@@ -35,7 +35,7 @@ class Node(object):
 
 class CPCBound:
     def __init__(self, task_set, core_num=4):
-        self.self_looping_idx = 0
+        self.self_looping_idx = -1
         self.task_set = task_set # G = (V,E)
         self.node_set =[]
         self.core_num = core_num # m
@@ -58,6 +58,7 @@ class CPCBound:
         self.generate_finish_time_bound()
         self.get_alpha_beta()
 
+        # print("--------------------------------")
         # print("provider_group: ", self.provider_group)
         # print("consumer_group (F): ", self.consumer_group)
         # print("next_provider_consumer_group (G): ", self.next_provider_consumer_group)
@@ -68,10 +69,14 @@ class CPCBound:
 
         # print("alpha_arr: ", self.alpha_arr)
         # print("beta_arr: ", self.beta_arr)
+        # print("--------------------------------")
         self.calculate_bound()
 
     def __str__(self):
         return ''
+
+    def cvt(self, i) :
+        return i
 
     def generate_node_set(self):
         for i in range(len(self.task_set)):
@@ -179,8 +184,12 @@ class CPCBound:
                 sub_path += path
                 sub_path.append(i)
                 self.find_complete_path(sub_path)
-
+        
     def construct_cpc_model(self):
+        self.provider_group = []
+        self.consumer_group = []
+        self.next_provider_consumer_group = []
+
         non_critical_nodes = self.non_critical_nodes.copy()
         theta = []
         for idx in range(len(self.critical_path)):
@@ -281,6 +290,9 @@ class CPCBound:
 
     def get_alpha_beta(self):
         self.finish_time_provider_arr = []
+        self.alpha_arr = []
+        self.beta_arr = []
+
         for provider in self.provider_group:
             provider_finish = []
             for idx in provider:
@@ -406,7 +418,6 @@ class CPCBound:
             max_path = []
 
             for path in local_path:
-                # print(path)
                 if len(path) > 1:
                     dist = 0
                     for idx in path:
@@ -417,14 +428,11 @@ class CPCBound:
                 else:
                     max_dist = self.node_set[path[0]].exec_t
                     max_path = path
-            # print(max_path)
             for idx in max_path:
                 if self.node_set[idx].finish_time > f_theta_i:
                     loc_path_after.append(idx)
-            # print(i, loc_path_after)
             if end_node_idx in loc_path_after:
                 longest_local_path = loc_path_after.copy()
-                # print("long", longest_local_path)
             else:
                 longest_local_path = loc_path_after.copy()
                 longest_local_path.append(end_node_idx)
@@ -448,7 +456,6 @@ class CPCBound:
     def calculate_bound(self):
         sum_response_time = 0
         for theta_i in range(len(self.provider_group)):
-            # print(theta_i)
             length_i = 0
             for idx in self.provider_group[theta_i]:
                 length_i += self.node_set[idx].exec_t
@@ -460,13 +467,12 @@ class CPCBound:
             beta_i = self.beta_arr[theta_i]
 
             response_time_i = length_i + math.ceil((workload_i - length_i - alpha_i - beta_i)/self.core_num) + beta_i
-            # print(theta_i, length_i, workload_i, alpha_i, beta_i, response_time_i)
             sum_response_time += response_time_i
         return sum_response_time
 
     def setting_theta(self, self_looping_idx):
         self.self_looping_idx = self_looping_idx
-
+        self.get_critical_path() 
         idx_in_provider = 0
         splited = []
         for provider in self.provider_group:
@@ -525,3 +531,110 @@ class CPCBound:
             else:
                 self.consumer_group.append([])
                 self.next_provider_consumer_group.append([])
+
+
+class CPCBackup(CPCBound) :
+    def __init__(self, dag, core_num=4):
+        self.dag = dag
+        self.dangling_dag = dag.dangling_dag
+        self.backup = dag.backup
+        self.backup_parent = dag.backup_parent
+        self.backup_child = dag.backup_child
+
+        self.self_looping_idx = -1
+        self.task_set = dag.task_set # G = (V,E)
+        self.node_set =[]
+        self.core_num = core_num # m
+        self.non_critical_nodes = []
+        self.critical_path = [] # Theta_i
+        self.complete_paths = [] #
+        self.provider_group = []
+        self.consumer_group = []
+        self.local_path_group = []
+        self.next_provider_consumer_group = []
+        self.total_workload = [] # W_i
+        self.finish_time_provider_arr = []
+        self.finish_time_consumer_arr = []
+        self.alpha_arr = []
+        self.beta_arr = []
+
+        self.generate_node_set()
+        self.get_critical_path()
+        self.construct_cpc_model()
+        self.generate_interference_group()
+        self.generate_finish_time_bound()
+        self.get_alpha_beta()
+
+        # print("provider_group: ", self.provider_group)
+        # print("consumer_group (F): ", self.consumer_group)
+        # print("next_provider_consumer_group (G): ", self.next_provider_consumer_group)
+        
+        # print("critical_path", self.critical_path)
+        # print("non-critical", self.non_critical_nodes)
+        # print("finish_time_provider_arr: ", self.finish_time_provider_arr)
+        # print("finish_time_consumer_arr: ", self.finish_time_consumer_arr)
+
+        # print("alpha_arr: ", self.alpha_arr)
+        # print("beta_arr: ", self.beta_arr)
+        self.calculate_bound()
+
+    def generate_node_set(self):
+        node_dict = {}
+        self.critical_path = []
+        new_num = 0
+        for i in range(len(self.task_set)) :
+            if i not in self.dangling_dag :
+                node_dict[i] = new_num
+                new_num += 1
+        node_dict[len(self.task_set)] = new_num
+        self.node_dict = node_dict
+
+        for i in range(len(self.task_set)):
+            if i not in self.dangling_dag :
+                idx = node_dict[i]
+                node_param = {
+                    "vid": str(idx),
+                    "level": self.task_set[i].level,
+                    "exec_t": self.task_set[i].exec_t,
+                    "pred": [node_dict[p] for p in self.task_set[i].parent_b],
+                    "succ": [node_dict[c] for c in self.task_set[i].child_b],
+                    "deadline": self.task_set[i].deadline,
+                }
+
+                node = Node(**node_param)
+                self.node_set.append(node)
+                if i in self.dag.critical_path :
+                    self.critical_path.append(node_dict[i])
+
+        new_level = max([self.task_set[d].level for d in self.dangling_dag])
+        node_param = {
+            "vid": str(new_num),
+            "level": new_level,
+            "exec_t": self.backup,
+
+            "pred": [node_dict[p] for p in self.backup_parent],
+            "succ": [node_dict[c] for c in self.backup_child],
+            
+            "deadline": 0,
+        }
+        node = Node(**node_param)
+        self.node_set.append(node)
+
+        # find the ancestors and descendants of v_j
+        for i, v_j in enumerate(self.node_set) :
+            if len(v_j.pred) == 0 :
+                self.node_set[i].isSource = True
+            elif len(v_j.succ) == 0 :
+                self.node_set[i].isSink = True
+
+            v_j.anc = self.find_ancestor(v_j.pred)
+            v_j.desc = self.find_descendant(v_j.succ)
+
+    def cvt(self, i) :
+        return self.node_dict[i]
+
+    def get_critical_path(self) :
+        self.non_critical_nodes = []
+        for n in range(len(self.node_set)) :
+            if n not in self.critical_path :
+                self.non_critical_nodes.append(n)

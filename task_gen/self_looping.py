@@ -2,46 +2,57 @@ from .dag_file import DAGFile
 from .dag_gen import DAGGen
 from random import randint, random
 
-def assign_looping(dag, cp) :
+def assign_looping(dag, cp, dangling_num) :
     sl_idx = randint(1, len(cp)-2) # TODO: check invalidness (1 <= len(cp)-2 always..)
+    dag.sl_idx = sl_idx
     sl = cp[sl_idx]
+    visited = [False for i in range(len(dag.task_set))]
 
-    ### check and change outgoing edge - Dangling DAG
-    # while True :
-    #     queue = [sl]
-    #     dangling = [[] for i in range(1, len(cp)-1)]
-    #     while len(queue) is not 0 :
-    #        q = queue.pop(0)
-    #         l = dag.task_set[q].level
+    assigned_list = [ ]
+    assigned_num = 0
 
-    #         # if q not in cp :
-    #         print("index: ", l, sl_idx, l-sl_idx)
-    #         dangling[l-sl_idx].append(q)
-            
-    #         for qq in dag.task_set[q].child :
-    #             queue.append(qq)
+    queue = [sl]
+    visited[sl] = True
 
-    #     if [] in dangling :
-    #         break 
+    for t in dag.task_set :
+        if t.level == 0 :
+            start_node = t.tid
+        if t.level == len(cp)-1 :
+            end_node = t.tid
 
-    #     for i in range(len(dangling)-1) :
-    #         p = dangling[i] ; c = dangling[i+1]
-    #         rand_p = p[randint(0, len(p)-1)] ; rand_c = c[randint(0, len(c)-1)]
-    #         new_child = list(set(dag.task_set[rand_p].child) & set().union(*dangling[i+1:]))
-    #         p_c = new_child[randint(0, len(new_child)-1)]
+    ## check and change outgoing edge - Dangling DAG
+    while assigned_num < dangling_num :
+        if len(queue) == 0 :
+            break
 
-    #         if rand_p in cp and p_c in cp :
-    #             continue
-    #         elif len(dag.task_set[rand_p].child) is 1 :
-    #             dag.task_set[rand_p].child.append(rand_c)
-    #             dag.task_set[rand_c].parent.append(rand_p)
-    #         elif len(dag.task_set[p_c].parent) is not 1 :
-    #             dag.task_set[rand_p].child.pop(p_c)
-    #             dag.task_set[p_c].parent.pop(rand_p)
+        q = queue.pop(0)
+        assigned_list.append(q)
+        assigned_num += 1
 
-    dag.dangling_dag = [sl]
+        if len(queue) < dangling_num - assigned_num : # assign all
+            if q not in cp or True: # TODO: Check..
+                for qq in dag.task_set[q].child :
+                    if not visited[qq] :
+                        visited[qq] = True
+                        queue.append(qq)
+
+        else : # enough to use only node in queue
+            for qq in dag.task_set[q].child :
+                if not visited[qq] : 
+                    dag.task_set[qq].parent.remove(q)
+                    dag.task_set[q].child.remove(qq)
+
+                    if len(dag.task_set[qq].parent) == 0 and qq != start_node :
+                        dag.task_set[qq].parent.append(start_node)
+                        dag.task_set[start_node].child.append(qq)
+
+                    if len(dag.task_set[q].child) == 0 and q != end_node :
+                        dag.task_set[end_node].parent.append(q)
+                        dag.task_set[q].child.append(end_node)
+
+    assigned_list.remove(sl)
+    dag.dangling_dag = assigned_list
     return dag, sl
-
 
 def argmax(value_list, index_list=None):
     if index_list is None :
@@ -87,7 +98,7 @@ def calculate_critical_path(dag) :
     return cp
 
 
-def SelfLoopingDag(dag_input) :
+def SelfLoopingDag(dag_input, dangling_num) :
     """
         Make self-looping node's WCET as -1
         and Return DAG and self-looping node index.
@@ -97,7 +108,37 @@ def SelfLoopingDag(dag_input) :
         dag = DAGFile(dag_input)
     else :
         dag = DAGGen(**dag_input)
+    
+    dag.critical_path = calculate_critical_path(dag)
+    dag, sl = assign_looping(dag, dag.critical_path, dangling_num)
 
-    critical_path = calculate_critical_path(dag)
-    dag, sl = assign_looping(dag, critical_path)
-    return dag, critical_path, sl
+    ## Add parent / child dependency for backup
+    dag.backup_parent = []
+    dag.backup_child = []
+    dag_len = len(dag.task_set)
+
+    for i, task in enumerate(dag.task_set) :
+        for child in task.child :
+            if i not in dag.dangling_dag : # Non dangling
+                if child in dag.dangling_dag :  # nd -> d
+                    dag.backup_parent.append(i)
+                    dag.task_set[i].child_b.append(dag_len)
+                else : # nd -> nd
+                    dag.task_set[i].child_b.append(child) 
+                    dag.task_set[child].parent_b.append(i)
+            else : 
+                if child not in dag.dangling_dag : # d -> nd
+                    dag.backup_child.append(child)
+                    dag.task_set[child].parent_b.append(dag_len)
+
+    dag.backup_parent.append(dag.sl_idx)
+    dag.task_set[dag.sl_idx].child_b.append(dag_len)
+
+    for i in range(len(dag.task_set)) :
+        dag.task_set[i].parent_b = list(set(dag.task_set[i].parent_b))
+        dag.task_set[i].child_b = list(set(dag.task_set[i].child_b))
+
+    dag.backup_parent = list(set(dag.backup_parent))
+    dag.backup_child = list(set(dag.backup_child))
+
+    return dag, dag.critical_path, sl
