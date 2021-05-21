@@ -11,6 +11,9 @@ from task_gen.dag_file import DAGFile
 from sched.classic import ClassicBound, ClassicBackup
 from sched.cpc import CPCBound, CPCBackup
 from sched.priority import calculate_makespan
+from sched.priority import assign_priority
+from sched.priority_bound import priority_interfere_group
+
 
 def check_count(dag, count, acceptance, deadline, cpu_num, backup=True) :
     score = 0 ; miss = 0
@@ -106,6 +109,10 @@ if __name__ == '__main__' :
             
             cpc.setting_theta(sl_idx)
             cpc_b.setting_theta(cpc_b.cvt(sl_idx))
+
+            priority_list = assign_priority(dag)
+            bound_priority = cpc.update_with_priority(priority_list)
+            # bound_priority_backup = cpc_b.update_with_priority(priority_list)
             sl_exec_t = 2.0
 
             deadline = int((args.node_avg * args.node_num) / (cpu_num * utilization))
