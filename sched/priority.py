@@ -4,19 +4,19 @@ from queue import PriorityQueue
 
 path.insert(0, '..')
 
-from task_gen.dag_file import DAGFile
-from task_gen.dag_gen import Task, DAGGen
-from task_gen.self_looping import argmax
-
-from .cpc import CPCBound
-from .naive import inter
-
 # from task_gen.dag_file import DAGFile
 # from task_gen.dag_gen import Task, DAGGen
-# from task_gen.self_looping import argmax, SelfLoopingDag
+# from task_gen.self_looping import argmax
 
-# from cpc import CPCBound
-# from naive import inter
+# from .cpc import CPCBound
+# from .naive import inter
+
+from task_gen.dag_file import DAGFile
+from task_gen.dag_gen import Task, DAGGen
+from task_gen.self_looping import argmax, SelfLoopingDag
+
+from cpc import CPCBound
+from naive import inter
 
 def make_subDAG(dag, node_list) :
     newDAG = copy.deepcopy(dag)
@@ -117,7 +117,12 @@ def calculate_F(dag, nl, cp) :
     return F
 
 
-def assign_priority(dag, nl, priority_list, priority=100) :
+def assign_priority(dag, nl=None, priority_list=None, priority=100) :
+    if nl is None :
+        nl = [i for i in range(dag_len)]
+    if priority_list is None :
+        priority_list = [0 for i in range(dag_len)]
+        
     cp = calculate_critical_path(dag, nl)
     F = calculate_F(dag, nl, cp)
     for critical_node in cp :
@@ -361,8 +366,9 @@ if __name__ == '__main__' :
     print(DAG)
 
     dag_len = len(DAG.task_set)
-    priority_list = assign_priority(DAG, [i for i in range(dag_len)], [0 for i in range(dag_len)])
+    priority_list = assign_priority(DAG)
     print(priority_list, DAG.dangling_dag)
+
     DAG.backup=20
     makespan = calculate_makespan(DAG, 2, True)
     print(makespan)
