@@ -14,11 +14,14 @@ class Node(object):
         self.desc = []
         self.alpha = 0
         self.beta = 0
+        self.actual_delay = 0
 
         self.isProvider = False
         self.consumer_group = []  # F(theta_i)
         self.consumer_next_provider_group = []  # G(theta_i)
         self.interference_group = []
+        self.interference_group_priority = []
+
         self.concurrent_group = []
         self.non_critical_group = []
         self.isSink = kwargs.get('isLeaf', False)
@@ -51,6 +54,9 @@ class CPCBound:
         self.finish_time_consumer_arr = []
         self.alpha_arr = []
         self.beta_arr = []
+        self.interfere_group_priority = []
+        self.priority_list = []
+        self.longest_local_path_group = []
         self.generate_node_set()
         self.get_critical_path()
         self.construct_cpc_model()
@@ -343,6 +349,9 @@ class CPCBound:
                     longest_local_path.append(idx)
             if longest_local_path:
                 longest_local_path = self.get_longest_path(longest_local_path, theta_i, self.finish_time_provider_arr[theta_i])
+                self.longest_local_path_group.append(longest_local_path)
+            else:
+                self.longest_local_path_group.append([])
             # print(theta_i, longest_local_path)
 
             beta_i = 0
@@ -352,6 +361,7 @@ class CPCBound:
                 else:
                     beta_i += self.node_set[idx].finish_time - self.finish_time_provider_arr[theta_i]
             self.beta_arr.append(beta_i)
+
 
     def get_all_path_of_group(self, group):
         all_path = []
@@ -532,6 +542,113 @@ class CPCBound:
                 self.consumer_group.append([])
                 self.next_provider_consumer_group.append([])
 
+    def update_with_priority(self, priority_list):
+        # print("length:", len(priority_list), "arr:", priority_list)
+        for idx in range(len(self.node_set)):
+            self.node_set[idx].priority = priority_list[idx]
+
+        self.update_interfere_group_priority()
+        self.update_finish_time_bound_priority()
+        self.get_alpha_beta()
+        bound = self.calculate_bound_priority()
+        return bound
+
+    def update_interfere_group_priority(self):
+        for node in self.node_set:
+            lower_priority_nodes = []
+            for candidate in self.node_set:
+                if int(candidate.vid) in node.interference_group:
+                    if candidate.priority > node.priority:
+                        node.interference_group_priority.append(int(candidate.vid))
+                    elif candidate.priority < node.priority:
+                        lower_priority_nodes.append(candidate)
+            # print("lower nodes:", lower_priority_nodes)
+            for idx in range(self.core_num - 1):
+                if lower_priority_nodes:
+                    max_node = max(lower_priority_nodes, key=lambda node : node.exec_t)
+                    node.interference_group_priority.append(int(max_node.vid))
+                    lower_priority_nodes.remove(max_node)
+
+                else:
+                    break
+
+    def update_finish_time_bound_priority(self):
+        # source node's finish time is 0 + its exec_t
+        for node in self.node_set:
+            if node.level == 0:
+                node.finish_time = node.exec_t
+
+        node_set_sort = sorted(self.node_set, key=lambda node: node.level)
+        for node in node_set_sort:
+            pred_finish = []
+            for idx in node.pred:
+                pred_finish.append(self.node_set[idx].finish_time)
+            interference = 0
+            non_critical_concurrent_group = list(set(node.concurrent_group) - set(self.critical_path))
+            all_path_group = self.get_all_path_of_group(non_critical_concurrent_group)
+            # print(node.vid, all_path_group)
+            if (int(node.vid) in self.critical_path) or len(all_path_group) < self.core_num - 1:
+                interference = 0
+            else:
+                sum = 0
+                for idx in node.interference_group_priority:
+                    sum += self.node_set[idx].exec_t
+                sum /= (self.core_num - 1)
+                interference = math.ceil(sum)
+
+            if pred_finish:
+                node.finish_time = node.exec_t + max(pred_finish) + interference
+            # print(node.vid, node.finish_time)
+
+    def calculate_bound_priority(self):
+        print("longest", self.longest_local_path_group)
+        sum_response_time = 0
+        for theta_i in range(len(self.provider_group)):
+            length_i = 0
+            for idx in self.provider_group[theta_i]:
+                length_i += self.node_set[idx].exec_t
+
+            beta_i = self.beta_arr[theta_i]
+            interfering_workload = []
+            lower_priority_nodes = []
+            print("longest", self.longest_local_path_group[theta_i])
+            for inter in self.longest_local_path_group[theta_i]:
+                #print(inter, self.node_set[inter].interference_group)
+                for j in self.node_set[inter].interference_group:
+                    if self.node_set[j].finish_time > self.finish_time_provider_arr[theta_i]:
+                        if self.node_set[j].priority > self.node_set[inter].priority:
+                            interfering_workload.append(int(self.node_set[j].vid))
+                        elif self.node_set[j].priority < self.node_set[inter].priority:
+                            lower_priority_nodes.append(self.node_set[j])
+            # print(lower_priority_nodes)
+            for node in lower_priority_nodes:
+                if node.finish_time - node.exec_t >= self.finish_time_provider_arr[theta_i]:
+                    node.actual_delay = node.exec_t
+                else:
+                    node.actual_delay = node.finish_time - node.exec_t
+
+            for idx in range(self.core_num):
+                if lower_priority_nodes:
+                    max_node = max(lower_priority_nodes, key=lambda node: node.actual_delay)
+                    interfering_workload.append(int(max_node.vid))
+                    lower_priority_nodes.remove(max_node)
+                else:
+                    break
+            interference = 0
+            print("inter", interfering_workload)
+            if interfering_workload:
+                inter_group = self.get_all_path_of_group(interfering_workload)
+
+                if len(inter_group) >= self.core_num:
+                    for j in interfering_workload:
+                        interference += self.node_set[j].actual_delay
+                    interference /= self.core_num
+                    interference = math.ceil(interference)
+
+            response_time_i = length_i + beta_i + interference
+            sum_response_time += response_time_i
+        return sum_response_time
+
 
 class CPCBackup(CPCBound) :
     def __init__(self, dag, core_num=4):
@@ -557,6 +674,7 @@ class CPCBackup(CPCBound) :
         self.finish_time_consumer_arr = []
         self.alpha_arr = []
         self.beta_arr = []
+        self.longest_local_path_group = []
 
         self.generate_node_set()
         self.get_critical_path()
@@ -638,3 +756,4 @@ class CPCBackup(CPCBound) :
         for n in range(len(self.node_set)) :
             if n not in self.critical_path :
                 self.non_critical_nodes.append(n)
+
