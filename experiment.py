@@ -43,7 +43,7 @@ if __name__ == '__main__' :
     parser.add_argument('--node_std', type=int, help='WCET std of nodes', default=10)
 
     parser.add_argument('--function', type=str, help='function type for score', default='e')
-    parser.add_argument('--function_std', type=float, help='variance for score function', default=0.1)
+    parser.add_argument('--function_std', type=float, help='variance for score function', default=0.05)
     parser.add_argument('--acceptance', type=float, help='Acceptance bar for score function', default=0.85)
 
     parser.add_argument('--base', type=str, help='list for value of base [small, middle, large]', default='100,200,300')
@@ -209,8 +209,8 @@ if __name__ == '__main__' :
     print("critical: ", critical)
 
     if args.experiments in ['density', 'std'] :
-        f.write("{},{},{},{},{}".format(*score))
-        f.write("{},{},{},{},{}".format(*miss))
+        f.write("{},{},{},{},{}\n".format(*score))
+        f.write("{},{},{},{},{}\n".format(*miss))
 
     if args.experiments in ['acc', 'density', 'std'] :
         f.close()
