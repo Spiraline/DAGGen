@@ -11,8 +11,7 @@ from task_gen.dag_file import DAGFile
 from sched.classic import ClassicBound, ClassicBackup
 from sched.cpc import CPCBound, CPCBackup
 from sched.priority import calculate_makespan
-from sched.priority import assign_priority
-from sched.priority_bound import priority_interfere_group
+from sched.priority import assign_priority, assign_priority_backup
 
 
 def check_count(dag, count, acceptance, deadline, cpu_num, backup=True) :
@@ -45,17 +44,19 @@ if __name__ == '__main__' :
 
     parser.add_argument('--function', type=str, help='function type for score', default='e')
     parser.add_argument('--function_std', type=float, help='variance for score function', default=0.1)
-    parser.add_argument('--acceptance', type=float, help='Acceptance bar for score function', default=0.9)
+    parser.add_argument('--acceptance', type=float, help='Acceptance bar for score function', default=0.85)
 
     parser.add_argument('--base', type=str, help='list for value of base [small, middle, large]', default='100,200,300')
-    parser.add_argument('--utilization', type=float, help='(avg execution time * node #) / (deadline * cpu #)', default=0.3)
-    parser.add_argument('--dangling', type=float, help='dangling DAG node # / total node #', default=0.1)
+    parser.add_argument('--density', type=float, help='(avg execution time * node #) / (deadline * cpu #)', default=0.3)
+    parser.add_argument('--dangling', type=float, help='dangling DAG node # / total node #', default=0.2)
+
+    parser.add_argument('--experiments', type=str, help='experiments guide', default='None')
     args = parser.parse_args()
 
     ### experiments argument
     test_size = args.test_size
     cpu_num = args.cpu_num
-    utilization = args.utilization
+    density = args.density
 
     ### TODO: Implement more function type and set proper acceptance bar value.
     func_std = args.function_std
@@ -81,7 +82,6 @@ if __name__ == '__main__' :
         "extra_arc_ratio": 0.0
     }
     dangling_num = math.ceil(args.node_num * args.dangling)
-    ### TODO: add variance to backup node
     acceptance = args.acceptance
 
     score = [0 for i in range(5)] # Classic, CPC, S, M, L
@@ -89,16 +89,23 @@ if __name__ == '__main__' :
     critical = [0 for i in range(5)]
     continued = 0
 
-    # file_name = "ratio_{}.txt".format(int(float(args.dangling)*100))
-    # file_name = "utilization_{}.txt".format(int(float(args.utilization)*100))
-    file_name = 'cpc_test.txt'
-    f = open(file_name, 'w')
+    if args.experiments not in ['None', 'acc', 'density', 'std'] :
+        raise NotImplementedError
+
+    if args.experiments in ['acc'] :
+        file_name = "accuracy_out.txt"
+    elif args.experiments in ['density'] :
+        file_name = "density_{}.txt".format(int(float(args.density)*100))
+    elif args.experiments in ['std'] :
+        file_name = "std_{}.txt".format(int(float(args.function_std)*100))
+
+    if args.experiments in ['acc', 'density', 'std'] :
+        f = open(file_name, 'w')
 
     j = 0
     while j < test_size :
         try :
             Task.idx = 0
-            
             dag, cp, sl_idx = SelfLoopingDag(dag_param, dangling_num)
             dag.backup = args.node_avg * math.ceil(len(dag.dangling_dag)*0.8)
 
@@ -106,27 +113,25 @@ if __name__ == '__main__' :
             classic_b = ClassicBackup(dag, cpu_num)
             cpc = CPCBound(dag.task_set, cpu_num)
             cpc_b = CPCBackup(dag, cpu_num)
-            
-            cpc.setting_theta(sl_idx)
-            cpc_b.setting_theta(cpc_b.cvt(sl_idx))
 
             priority_list = assign_priority(dag)
             bound_priority = cpc.update_with_priority(priority_list)
-            # bound_priority_backup = cpc_b.update_with_priority(priority_list)
+
+            backup_priority_list = assign_priority_backup(cpc_b)
+            bound_priority_backup = cpc_b.update_with_priority(backup_priority_list)
             sl_exec_t = 2.0
 
-            deadline = int((args.node_avg * args.node_num) / (cpu_num * utilization))
-            
+            deadline = int((args.node_avg * args.node_num) / (cpu_num * density))
+
             ## check failure of every method(classic, CPC, 3 base)
             ### iteratively check succeed / failure of classic and CPC        
             loop_count = [0, 0]
-            # cpc_min_exect = deadline - dag.backup - sum(dag.task_set[c].exec_t for c in classic_b.critical_path if c <len(dag.task_set))
             cpc_min_exect = deadline
 
             classic_budget = classic.calculate_budget(sl_idx, deadline, cpu_num)
             classic_bbudget = classic_b.calculate_budget(sl_idx, deadline, cpu_num)
 
-            loop_count[0] = math.floor(min(classic_budget, classic_bbudget) / 2)
+            loop_count[0] = math.floor(min(classic_budget, classic_bbudget) / sl_exec_t)
 
             start = 0
             end = math.floor(cpc_min_exect / sl_exec_t)
@@ -135,7 +140,7 @@ if __name__ == '__main__' :
                 mid = int((start+end-1)/2)
 
                 cpc.node_set[sl_idx].exec_t = mid * sl_exec_t
-                cpc_bound = cpc.calculate_bound()
+                cpc_bound = cpc.update_with_priority()
 
                 if deadline < cpc_bound :
                     end = mid
@@ -151,7 +156,7 @@ if __name__ == '__main__' :
                 mid = int((start+end-1)/2)
 
                 cpc_b.node_set[cpc_b.cvt(sl_idx)].exec_t = mid * sl_exec_t
-                cpc_bbound = cpc_b.calculate_bound()
+                cpc_bbound = cpc_b.update_with_priority()
 
                 if deadline < cpc_bbound :
                     end = mid
@@ -169,35 +174,43 @@ if __name__ == '__main__' :
             print(">[{}] {} {} - cpc({},{}) | deadline: {}".format(j, loop_count[0], loop_count[1], norm, err, deadline))
 
             loop_count[1] = max(loop_count)
-            f.write("{},{},{},{},{}\n".format(func_count2score(loop_count[0]), func_count2score(loop_count[1]), func_count2score(base_small), func_count2score(base_middle), func_count2score(base_large)))
+            
+            if args.experiments in ['acc'] :
+                f.write("{},{},{},{},{}\n".format(func_count2score(loop_count[0]), func_count2score(loop_count[1]), func_count2score(base_small), func_count2score(base_middle), func_count2score(base_large)))
 
             ### makespan for classic and CPC
-            # s0, m0 = check_count(dag, loop_count[0], acceptance, deadline, cpu_num, True)
-            # s1, m1 = check_count(dag, loop_count[1], acceptance, deadline, cpu_num, True)
-            # s2, m2 = check_count(dag, base_small, acceptance, deadline, cpu_num, False)
-            # s3, m3 = check_count(dag, base_middle, acceptance, deadline, cpu_num, False)
-            # s4, m4 = check_count(dag, base_large, acceptance, deadline, cpu_num, False)
+            s0, m0 = check_count(dag, loop_count[0], acceptance, deadline, cpu_num, True)
+            s1, m1 = check_count(dag, loop_count[1], acceptance, deadline, cpu_num, True)
+            s2, m2 = check_count(dag, base_small, acceptance, deadline, cpu_num, False)
+            s3, m3 = check_count(dag, base_middle, acceptance, deadline, cpu_num, False)
+            s4, m4 = check_count(dag, base_large, acceptance, deadline, cpu_num, False)
 
-            # score[0] += s0 ; miss[0] += m0 ; critical[0] += 1 if s0==1 and m0==1 else 0
-            # score[1] += s1 ; miss[1] += m1 ; critical[1] += 1 if s1==1 and m1==1 else 0
-            # score[2] += s2 ; miss[2] += m2 ; critical[2] += 1 if s2==1 or m2==1 else 0
-            # score[3] += s3 ; miss[3] += m3 ; critical[3] += 1 if s3==1 or m3==1 else 0
-            # score[4] += s4 ; miss[4] += m4 ; critical[4] += 1 if s4==1 or m4==1 else 0
+            if m0 == 1 or m1 == 1 :
+                continue
 
-            # f.write("{},{},{},{},{},{},{},{},{},{}\n".format(s0, m0, s1, m1, s2, m2, s3, m3, s4, m4))
-
+            score[0] += s0 ; miss[0] += m0 ; critical[0] += 1 if s0==1 and m0==1 else 0
+            score[1] += s1 ; miss[1] += m1 ; critical[1] += 1 if s1==1 and m1==1 else 0
+            score[2] += s2 ; miss[2] += m2 ; critical[2] += 1 if s2==1 or m2==1 else 0
+            score[3] += s3 ; miss[3] += m3 ; critical[3] += 1 if s3==1 or m3==1 else 0
+            score[4] += s4 ; miss[4] += m4 ; critical[4] += 1 if s4==1 or m4==1 else 0
             j += 1
+
         except KeyboardInterrupt :
-            # f.close()
+            if args.experiments in ['acc', 'density', 'std'] :
+                f.close()
             sys.exit()
-        # except Exception as e:
-        #     print('Continued: ', e)
-        #     continued += 1
+        except Exception as e:
+            print('Continued: ', e)
+            continued += 1
         
     ## sum up all result
     print("Error: ", continued)
     print("Unacceptable: ", score)
     print("critical: ", critical)
-    # f.write("{},{},{},{},{}".format(*score))
-    # f.write("{},{},{},{},{}".format(*miss))
-    f.close()
+
+    if args.experiments in ['density', 'std'] :
+        f.write("{},{},{},{},{}".format(*score))
+        f.write("{},{},{},{},{}".format(*miss))
+
+    if args.experiments in ['acc', 'density', 'std'] :
+        f.close()

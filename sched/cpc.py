@@ -542,10 +542,12 @@ class CPCBound:
                 self.consumer_group.append([])
                 self.next_provider_consumer_group.append([])
 
-    def update_with_priority(self, priority_list):
+    def update_with_priority(self, priority_list=None):
         # print("length:", len(priority_list), "arr:", priority_list)
-        for idx in range(len(self.node_set)):
-            self.node_set[idx].priority = priority_list[idx]
+        # update priority when priority list is given - assume priority list is already updated
+        if priority_list is not None : 
+            for idx in range(len(self.node_set)):
+                self.node_set[idx].priority = priority_list[idx]
 
         self.update_interfere_group_priority()
         self.update_finish_time_bound_priority()
@@ -601,7 +603,7 @@ class CPCBound:
             # print(node.vid, node.finish_time)
 
     def calculate_bound_priority(self):
-        print("longest", self.longest_local_path_group)
+        # print("longest", self.longest_local_path_group)
         sum_response_time = 0
         for theta_i in range(len(self.provider_group)):
             length_i = 0
@@ -611,7 +613,7 @@ class CPCBound:
             beta_i = self.beta_arr[theta_i]
             interfering_workload = []
             lower_priority_nodes = []
-            print("longest", self.longest_local_path_group[theta_i])
+            # print("longest", self.longest_local_path_group[theta_i])
             for inter in self.longest_local_path_group[theta_i]:
                 #print(inter, self.node_set[inter].interference_group)
                 for j in self.node_set[inter].interference_group:
@@ -635,7 +637,7 @@ class CPCBound:
                 else:
                     break
             interference = 0
-            print("inter", interfering_workload)
+            # print("inter", interfering_workload)
             if interfering_workload:
                 inter_group = self.get_all_path_of_group(interfering_workload)
 

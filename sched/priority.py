@@ -4,19 +4,12 @@ from queue import PriorityQueue
 
 path.insert(0, '..')
 
-# from task_gen.dag_file import DAGFile
-# from task_gen.dag_gen import Task, DAGGen
-# from task_gen.self_looping import argmax
-
-# from .cpc import CPCBound
-# from .naive import inter
-
 from task_gen.dag_file import DAGFile
 from task_gen.dag_gen import Task, DAGGen
-from task_gen.self_looping import argmax, SelfLoopingDag
+from task_gen.self_looping import argmax
 
-from cpc import CPCBound
-from naive import inter
+from .cpc import CPCBound
+from .naive import inter
 
 def make_subDAG(dag, node_list) :
     newDAG = copy.deepcopy(dag)
@@ -114,10 +107,14 @@ def calculate_F(dag, nl, cp) :
         for f in new_F :
             available.remove(f)
     
+    for a in available :
+        F[-1].append(a)
+    
     return F
 
 
 def assign_priority(dag, nl=None, priority_list=None, priority=100) :
+    dag_len = len(dag.task_set)
     if nl is None :
         nl = [i for i in range(dag_len)]
     if priority_list is None :
@@ -128,6 +125,7 @@ def assign_priority(dag, nl=None, priority_list=None, priority=100) :
     for critical_node in cp :
         priority_list[critical_node] = priority
     priority -= 1
+
     for i, theta_ in enumerate(F) :
         theta = theta_.copy()
         while len(theta) != 0 :
@@ -359,6 +357,123 @@ def makespan_backup(dag, core_num) :
                 execute[i] = -1
         # print('time: ', time, ' | waiting num: ', waiting[:-1], waiting[-1], " | avaliable: ", ' - '.join(["{} ({})".format(*z) for z in zip(available, execute)]))
     return time
+
+
+def calculate_critical_path_backup(dag, nl) :
+    if len(nl) == 1 :
+        return nl
+    distance = [0,] * len(dag.node_set)
+    indegree = [0,] * len(dag.node_set)
+    task_queue = []
+
+    for n in nl :
+        if inter(dag.node_set[n].pred, nl) == [] :
+            task_queue.append(dag.node_set[n])
+            distance[n] = dag.node_set[n].exec_t
+
+    for i, v in enumerate(dag.node_set) :
+        indegree[i] = len(v.pred)
+
+    while task_queue :
+        vertex = task_queue.pop(0)
+        for v in inter(vertex.succ, nl) :
+            distance[v] = max(dag.node_set[v].exec_t + distance[int(vertex.vid)], distance[v]) 
+            indegree[v] -= 1
+            if indegree[v] == 0 :
+                task_queue.append(dag.node_set[v])    
+
+    cp = []
+    cv = argmax(distance)
+
+    while True :
+        cp.append(cv)
+        if len(inter(dag.node_set[cv].pred, nl)) == 0 :
+            break
+        cv = argmax(distance, inter(dag.node_set[cv].pred, nl))
+    cp.reverse()
+    return cp
+
+def calculate_F_backup(dag, nl, cp) :
+    thetas = []
+    theta_candidate = []
+    for c in cp :
+        parent_candidate = list(set(nl)-set(cp))
+        if len(inter(dag.node_set[c].pred, parent_candidate)) != 0  :
+            thetas.append(theta_candidate)
+            theta_candidate = [c]
+        else :
+            theta_candidate.append(c)
+    if len(theta_candidate) != 0 :
+        thetas.append(theta_candidate)
+
+    F = [[] for i in range(len(thetas))]
+    available = list(set(nl) - set(cp))
+
+    for i in range(len(thetas)-1) :
+        next_theta = thetas[i+1]
+        new_F = []
+        visited = [False for i in range(len(dag.node_set))]
+        queue = []
+        for t in next_theta :
+            for p in inter(dag.node_set[t].pred, nl) :
+                visited[p] = True
+                queue.append(p)
+
+        while queue :
+            q = queue.pop(0)
+            new_F.append(q)
+            for p in inter(dag.node_set[q].pred, nl) :
+                if not visited[p] :
+                    visited[p] = True
+                    queue.append(p)
+
+        new_F = inter(new_F, available)
+        F[i] = new_F.copy()
+        for f in new_F :
+            available.remove(f)
+    
+    for a in available :
+        F[-1].append(a)
+    
+    return F
+
+
+def assign_priority_backup(dag, nl=None, priority_list=None, priority=100) :
+    dag_len = len(dag.node_set)
+    if nl is None :
+        nl = [i for i in range(dag_len)]
+    if priority_list is None :
+        priority_list = [0 for i in range(dag_len)]
+        
+    cp = calculate_critical_path_backup(dag, nl)
+    F = calculate_F_backup(dag, nl, cp)
+    for critical_node in cp :
+        priority_list[critical_node] = priority
+    priority -= 1
+
+    for i, theta_ in enumerate(F) :
+        theta = theta_.copy()
+        while len(theta) != 0 :
+            critical_path = calculate_critical_path_backup(dag, theta)
+            recursively = False
+            for c in critical_path :
+                if len(inter(dag.node_set[c].pred, theta)) > 1 :
+                    recursively = True
+                    break
+
+            if recursively :
+                new_node_set = make_subDAG(dag, theta)
+                priority_list = assign_priority_backup(new_node_set, theta, priority_list, priority)
+                break
+            else :
+                for c in critical_path :
+                    priority_list[c] = priority
+                    if c in theta :
+                        theta.remove(c)
+                priority -= 1
+    
+    return priority_list
+
 
 if __name__ == '__main__' :
     DAG, cp, sl_idx = SelfLoopingDag('../input/input4.txt', 4)
