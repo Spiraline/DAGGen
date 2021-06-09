@@ -18,7 +18,7 @@ def check_count(dag, count, acceptance, deadline, cpu_num, backup=True) :
     score = 0 ; miss = 0
     dag.task_set[sl_idx].exec_t = 2 * count
 
-    if func_count2score(count) > acceptance :
+    if count2score(count) > acceptance :
         makespan = calculate_makespan(dag, cpu_num, False)
     else :
         score = 1
@@ -31,6 +31,48 @@ def check_count(dag, count, acceptance, deadline, cpu_num, backup=True) :
         miss = 1
     return score, miss
 
+def check_budget(dag, budget_list, acceptance, deadline, cpu_num) :
+    unacceptable = [0, 0, 0, 0, 0]
+    miss_deadline = [0, 0, 0, 0, 0]
+    makespan = [0, 0, 0, 0, 0]
+
+    default_count = math.floor(score2count(acceptance))
+    acceptable_count = max(budget_list) + 1
+
+    for i in range(default_count, max(budget_list)+1) :
+        score = count2score(i)
+        if score > acceptance :
+            acceptable_count = i
+            break
+
+    unacceptable = [1 if b < acceptable_count else 0 for b in budget_list]
+
+    # check makespan
+    dag.task_set[sl_idx].exec_t = 2 * min(budget_list[0], acceptable_count)
+    if unacceptable[0] == 0 : # success case
+        makespan[0] = calculate_makespan(dag, cpu_num, False)
+    else : # failure case
+        makespan[0] = calculate_makespan(dag, cpu_num, True)
+
+    dag.task_set[sl_idx].exec_t = 2 * min(budget_list[1], acceptable_count)
+    if unacceptable[1] == 0 : # success case
+        makespan[1] = calculate_makespan(dag, cpu_num, False)
+    else : # failure case
+        makespan[1] = calculate_makespan(dag, cpu_num, True)
+
+    dag.task_set[sl_idx].exec_t = 2 * min(budget_list[2], acceptable_count)
+    makespan[2] = calculate_makespan(dag, cpu_num, False)
+
+    dag.task_set[sl_idx].exec_t = 2 * min(budget_list[3], acceptable_count)
+    makespan[3] = calculate_makespan(dag, cpu_num, False)
+
+    dag.task_set[sl_idx].exec_t = 2 * min(budget_list[4], acceptable_count)
+    makespan[4] = calculate_makespan(dag, cpu_num, False)
+
+    # check deadline
+    miss_deadline = [1 if m>deadline else 0 for m in makespan]
+
+    return unacceptable, miss_deadline
 
 if __name__ == '__main__' :
     parser = argparse.ArgumentParser(description='argparse for test')
@@ -60,13 +102,22 @@ if __name__ == '__main__' :
 
     ### TODO: Implement more function type and set proper acceptance bar value.
     func_std = args.function_std
+    def get_noise() :
+        return normal(0, func_std, 1)
+
     if args.function == 'log' :
-        def func_count2score(x) :
-            return math.log(x+1) * normal(0, func_std, 1)
+        def count2score(x) :
+            return math.log(x+1) * get_noise()
     elif args.function == 'e' :
-        def func_count2score(x) :
-            delta = normal(0, func_std, 1)
-            return max(1 - pow(math.e, -x/50) - math.fabs(delta), 0)
+        def count2score(x, std=True) :
+            delta = get_noise()
+            if std :
+                return max(1 - pow(math.e, -x/50) - math.fabs(delta), 0)
+            else :
+                return 1 - pow(math.e, -x/50)
+
+        def score2count(score) :
+            return (-50) * math.log(-score+1)
     else :
         raise NotImplementedError
 
@@ -124,7 +175,6 @@ if __name__ == '__main__' :
             deadline = int((args.node_avg * args.node_num) / (cpu_num * density))
 
             ## check failure of every method(classic, CPC, 3 base)
-            ### iteratively check succeed / failure of classic and CPC        
             loop_count = [0, 0]
             cpc_min_exect = deadline
 
@@ -138,7 +188,6 @@ if __name__ == '__main__' :
 
             while start < end :
                 mid = int((start+end-1)/2)
-
                 cpc.node_set[sl_idx].exec_t = mid * sl_exec_t
                 cpc_bound = cpc.update_with_priority()
 
@@ -176,15 +225,14 @@ if __name__ == '__main__' :
             loop_count[1] = max(loop_count)
             
             if args.experiments in ['acc'] :
-                f.write("{},{},{},{},{}\n".format(func_count2score(loop_count[0]), func_count2score(loop_count[1]), func_count2score(base_small), func_count2score(base_middle), func_count2score(base_large)))
+                f.write("{},{},{},{},{}\n".format(count2score(loop_count[0]), count2score(loop_count[1]), count2score(base_small), count2score(base_middle), count2score(base_large)))
 
             ### makespan for classic and CPC
-            s0, m0 = check_count(dag, loop_count[0], acceptance, deadline, cpu_num, True)
-            s1, m1 = check_count(dag, loop_count[1], acceptance, deadline, cpu_num, True)
-            s2, m2 = check_count(dag, base_small, acceptance, deadline, cpu_num, False)
-            s3, m3 = check_count(dag, base_middle, acceptance, deadline, cpu_num, False)
-            s4, m4 = check_count(dag, base_large, acceptance, deadline, cpu_num, False)
-
+            budget_list = [loop_count[0], loop_count[1], base_small, base_middle, base_large]
+            unacceptable, miss_deadline = check_budget(dag, budget_list, acceptance, deadline, cpu_num)
+            s0, s1, s2, s3, s4 = unacceptable
+            m0, m1, m2, m3, m4 = miss_deadline
+            
             if m0 == 1 or m1 == 1 :
                 continue
 
