@@ -80,6 +80,7 @@ if __name__ == '__main__' :
     parser.add_argument('--cpu_num', type=int, help='#cpu', default=4)
     parser.add_argument('--node_num', type=int, help='#node number in DAG', default=40)
     parser.add_argument('--dag_depth', type=float, help='depth of DAG', default=6.5)
+    parser.add_argument('--backup', type=float, help='Backup node execution time rate', default=0.8)
 
     parser.add_argument('--node_avg', type=int, help='WCET average of nodes', default=40)
     parser.add_argument('--node_std', type=int, help='WCET std of nodes', default=10)
@@ -158,7 +159,7 @@ if __name__ == '__main__' :
         try :
             Task.idx = 0
             dag, cp, sl_idx = SelfLoopingDag(dag_param, dangling_num)
-            dag.backup = args.node_avg * math.ceil(len(dag.dangling_dag)*0.8)
+            dag.backup = args.node_avg * math.ceil(len(dag.dangling_dag)*args.backup)
 
             classic = ClassicBound(dag.task_set, cpu_num)
             classic_b = ClassicBackup(dag, cpu_num)
