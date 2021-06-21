@@ -13,7 +13,7 @@ from sched.cpc import CPCBound, CPCBackup
 from sched.priority import calculate_makespan
 from sched.priority import assign_priority, assign_priority_backup
 
-def check_budget(dag, budget_list, acceptance, deadline, cpu_num, iter_size) :
+def check_budget(dag, budget_list, acceptance, deadline, cpu_num, iter_size, sl_unit) :
     unacceptable = [0, 0, 0, 0, 0]
     miss_deadline = [0, 0, 0, 0, 0]
     critical_failure = [0, 0, 0, 0, 0]
@@ -33,25 +33,25 @@ def check_budget(dag, budget_list, acceptance, deadline, cpu_num, iter_size) :
                 break
 
         # check makespan
-        dag.task_set[sl_idx].exec_t = 2 * min(budget_list[0], acceptable_count)
+        dag.task_set[sl_idx].exec_t = sl_unit * min(budget_list[0], acceptable_count)
         if budget_list[0] >= acceptable_count : # success case
             makespan[0] = calculate_makespan(dag, cpu_num, False)
         else : # failure case
             makespan[0] = calculate_makespan(dag, cpu_num, True)
 
-        dag.task_set[sl_idx].exec_t = 2 * min(budget_list[1], acceptable_count)
+        dag.task_set[sl_idx].exec_t = sl_unit * min(budget_list[1], acceptable_count)
         if budget_list[1] >= acceptable_count : # success case
             makespan[1] = calculate_makespan(dag, cpu_num, False)
         else : # failure case
             makespan[1] = calculate_makespan(dag, cpu_num, True)
 
-        dag.task_set[sl_idx].exec_t = 2 * min(budget_list[2], acceptable_count)
+        dag.task_set[sl_idx].exec_t = sl_unit * min(budget_list[2], acceptable_count)
         makespan[2] = calculate_makespan(dag, cpu_num, False)
 
-        dag.task_set[sl_idx].exec_t = 2 * min(budget_list[3], acceptable_count)
+        dag.task_set[sl_idx].exec_t = sl_unit * min(budget_list[3], acceptable_count)
         makespan[3] = calculate_makespan(dag, cpu_num, False)
 
-        dag.task_set[sl_idx].exec_t = 2 * min(budget_list[4], acceptable_count)
+        dag.task_set[sl_idx].exec_t = sl_unit * min(budget_list[4], acceptable_count)
         makespan[4] = calculate_makespan(dag, cpu_num, False)
 
         iterative += 1
@@ -76,6 +76,7 @@ if __name__ == '__main__' :
     parser.add_argument('--node_num', type=int, help='#node number in DAG', default=40)
     parser.add_argument('--dag_depth', type=float, help='depth of DAG', default=6.5)
     parser.add_argument('--backup', type=float, help='Backup node execution time rate', default=0.8)
+    parser.add_argument('--sl_unit', type=int, help='SL node execution unit time', default=2)
 
     parser.add_argument('--node_avg', type=int, help='WCET average of nodes', default=40)
     parser.add_argument('--node_std', type=int, help='WCET std of nodes', default=10)
@@ -96,6 +97,7 @@ if __name__ == '__main__' :
     iter_size = args.iter_size
     cpu_num = args.cpu_num
     density = args.density
+    sl_unit = args.sl_unit
 
     ### TODO: Implement more function type and set proper acceptance bar value.
     func_std = args.function_std
@@ -167,7 +169,7 @@ if __name__ == '__main__' :
 
             backup_priority_list = assign_priority_backup(cpc_b)
             bound_priority_backup = cpc_b.update_with_priority(backup_priority_list)
-            sl_exec_t = 2.0
+            sl_exec_t = sl_unit
 
             deadline = int((args.node_avg * args.node_num) / (cpu_num * density))
 
@@ -214,7 +216,7 @@ if __name__ == '__main__' :
             loop_count[1] = min(norm, err)
 
             if any([l <= 1 for l in loop_count]) :
-                print("Countinued - Non-feasible CPC({}, {})".format(norm, err))
+                print("Continued - Non-feasible CPC({}, {})".format(norm, err))
                 continue
 
             print(">[{}] {} {} - cpc({},{}) | deadline: {}".format(j, loop_count[0], loop_count[1], norm, err, deadline))
@@ -226,7 +228,7 @@ if __name__ == '__main__' :
 
             ### makespan for classic and CPC
             budget_list = [loop_count[0], loop_count[1], base_small, base_middle, base_large]
-            unacceptable, miss_deadline, critical_failure = check_budget(dag, budget_list, acceptance, deadline, cpu_num, iter_size)
+            unacceptable, miss_deadline, critical_failure = check_budget(dag, budget_list, acceptance, deadline, cpu_num, iter_size, sl_unit)
             s0, s1, s2, s3, s4 = unacceptable
             m0, m1, m2, m3, m4 = miss_deadline
             c0, c1, c2, c3, c4 = critical_failure
@@ -250,11 +252,13 @@ if __name__ == '__main__' :
     ## sum up all result
     print("Error: ", continued)
     print("Unacceptable: ", score)
+    print("Miss deadline: ", miss)
     print("critical: ", critical)
 
     if args.experiments in ['density', 'std'] :
         f.write("{},{},{},{},{}\n".format(*score))
         f.write("{},{},{},{},{}\n".format(*miss))
+        f.write("{},{},{},{},{}\n".format(*critical))
 
     if args.experiments in ['acc', 'density', 'std'] :
         f.close()
