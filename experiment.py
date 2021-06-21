@@ -13,70 +13,65 @@ from sched.cpc import CPCBound, CPCBackup
 from sched.priority import calculate_makespan
 from sched.priority import assign_priority, assign_priority_backup
 
-
-def check_count(dag, count, acceptance, deadline, cpu_num, backup=True) :
-    score = 0 ; miss = 0
-    dag.task_set[sl_idx].exec_t = 2 * count
-
-    if count2score(count) > acceptance :
-        makespan = calculate_makespan(dag, cpu_num, False)
-    else :
-        score = 1
-        if backup :
-            makespan = calculate_makespan(dag, cpu_num, True)
-        else :
-            makespan = calculate_makespan(dag, cpu_num, False)
-            
-    if makespan > deadline :
-        miss = 1
-    return score, miss
-
-def check_budget(dag, budget_list, acceptance, deadline, cpu_num) :
+def check_budget(dag, budget_list, acceptance, deadline, cpu_num, iter_size) :
     unacceptable = [0, 0, 0, 0, 0]
     miss_deadline = [0, 0, 0, 0, 0]
+    critical_failure = [0, 0, 0, 0, 0]
     makespan = [0, 0, 0, 0, 0]
 
     default_count = math.floor(score2count(acceptance))
     acceptable_count = max(budget_list) + 1
+    
+    iterative = 0
+    while iterative < iter_size :
+        # find unacceptable or miss deadline cases for iter_size times
 
-    for i in range(default_count, max(budget_list)+1) :
-        score = count2score(i)
-        if score > acceptance :
-            acceptable_count = i
-            break
+        for j in range(default_count, max(budget_list)+1) : # find first fit
+            score = count2score(j)
+            if score > acceptance :
+                acceptable_count = j
+                break
 
-    unacceptable = [1 if b < acceptable_count else 0 for b in budget_list]
+        # check makespan
+        dag.task_set[sl_idx].exec_t = 2 * min(budget_list[0], acceptable_count)
+        if budget_list[0] >= acceptable_count : # success case
+            makespan[0] = calculate_makespan(dag, cpu_num, False)
+        else : # failure case
+            makespan[0] = calculate_makespan(dag, cpu_num, True)
 
-    # check makespan
-    dag.task_set[sl_idx].exec_t = 2 * min(budget_list[0], acceptable_count)
-    if unacceptable[0] == 0 : # success case
-        makespan[0] = calculate_makespan(dag, cpu_num, False)
-    else : # failure case
-        makespan[0] = calculate_makespan(dag, cpu_num, True)
+        dag.task_set[sl_idx].exec_t = 2 * min(budget_list[1], acceptable_count)
+        if budget_list[1] >= acceptable_count : # success case
+            makespan[1] = calculate_makespan(dag, cpu_num, False)
+        else : # failure case
+            makespan[1] = calculate_makespan(dag, cpu_num, True)
 
-    dag.task_set[sl_idx].exec_t = 2 * min(budget_list[1], acceptable_count)
-    if unacceptable[1] == 0 : # success case
-        makespan[1] = calculate_makespan(dag, cpu_num, False)
-    else : # failure case
-        makespan[1] = calculate_makespan(dag, cpu_num, True)
+        dag.task_set[sl_idx].exec_t = 2 * min(budget_list[2], acceptable_count)
+        makespan[2] = calculate_makespan(dag, cpu_num, False)
 
-    dag.task_set[sl_idx].exec_t = 2 * min(budget_list[2], acceptable_count)
-    makespan[2] = calculate_makespan(dag, cpu_num, False)
+        dag.task_set[sl_idx].exec_t = 2 * min(budget_list[3], acceptable_count)
+        makespan[3] = calculate_makespan(dag, cpu_num, False)
 
-    dag.task_set[sl_idx].exec_t = 2 * min(budget_list[3], acceptable_count)
-    makespan[3] = calculate_makespan(dag, cpu_num, False)
+        dag.task_set[sl_idx].exec_t = 2 * min(budget_list[4], acceptable_count)
+        makespan[4] = calculate_makespan(dag, cpu_num, False)
 
-    dag.task_set[sl_idx].exec_t = 2 * min(budget_list[4], acceptable_count)
-    makespan[4] = calculate_makespan(dag, cpu_num, False)
+        iterative += 1
+        # accumulate things
+        for idx, (m, b) in enumerate(zip(makespan, budget_list)) :
+            if b < acceptable_count :
+                unacceptable[idx] += 1
+            if m > deadline :
+                miss_deadline[idx] += 1
+            
+            if idx > 1 and (b < acceptable_count or m > deadline) :
+                critical_failure[idx] += 1
 
-    # check deadline
-    miss_deadline = [1 if m>deadline else 0 for m in makespan]
-
-    return unacceptable, miss_deadline
+    return [u/iter_size for u in unacceptable], [d/iter_size for d in miss_deadline], [c/iter_size for c in critical_failure]
 
 if __name__ == '__main__' :
     parser = argparse.ArgumentParser(description='argparse for test')
-    parser.add_argument('--test_size', type=int, help='#test case', default=100)
+    parser.add_argument('--dag_num', type=int, help='Test DAG number', default=100)
+    parser.add_argument('--iter_size', type=int, help='#iterative per 1 DAG', default=100)
+
     parser.add_argument('--cpu_num', type=int, help='#cpu', default=4)
     parser.add_argument('--node_num', type=int, help='#node number in DAG', default=40)
     parser.add_argument('--dag_depth', type=float, help='depth of DAG', default=6.5)
@@ -97,7 +92,8 @@ if __name__ == '__main__' :
     args = parser.parse_args()
 
     ### experiments argument
-    test_size = args.test_size
+    dag_num = args.dag_num
+    iter_size = args.iter_size
     cpu_num = args.cpu_num
     density = args.density
 
@@ -155,7 +151,7 @@ if __name__ == '__main__' :
         f = open(file_name, 'w')
 
     j = 0
-    while j < test_size :
+    while j < dag_num :
         try :
             Task.idx = 0
             dag, cp, sl_idx = SelfLoopingDag(dag_param, dangling_num)
@@ -230,18 +226,17 @@ if __name__ == '__main__' :
 
             ### makespan for classic and CPC
             budget_list = [loop_count[0], loop_count[1], base_small, base_middle, base_large]
-            unacceptable, miss_deadline = check_budget(dag, budget_list, acceptance, deadline, cpu_num)
+            unacceptable, miss_deadline, critical_failure = check_budget(dag, budget_list, acceptance, deadline, cpu_num, iter_size)
             s0, s1, s2, s3, s4 = unacceptable
             m0, m1, m2, m3, m4 = miss_deadline
-            
-            if m0 == 1 or m1 == 1 :
-                continue
+            c0, c1, c2, c3, c4 = critical_failure
 
-            score[0] += s0 ; miss[0] += m0 ; critical[0] += 1 if s0==1 and m0==1 else 0
-            score[1] += s1 ; miss[1] += m1 ; critical[1] += 1 if s1==1 and m1==1 else 0
-            score[2] += s2 ; miss[2] += m2 ; critical[2] += 1 if s2==1 or m2==1 else 0
-            score[3] += s3 ; miss[3] += m3 ; critical[3] += 1 if s3==1 or m3==1 else 0
-            score[4] += s4 ; miss[4] += m4 ; critical[4] += 1 if s4==1 or m4==1 else 0
+            score[0] += s0 ; miss[0] += m0 ; critical[0] += c0
+            score[1] += s1 ; miss[1] += m1 ; critical[1] += c1
+            score[2] += s2 ; miss[2] += m2 ; critical[2] += c2
+            score[3] += s3 ; miss[3] += m3 ; critical[3] += c3
+            score[4] += s4 ; miss[4] += m4 ; critical[4] += c4
+
             j += 1
 
         except KeyboardInterrupt :
