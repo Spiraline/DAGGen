@@ -18,3 +18,21 @@ python3 dag_gen.py
 * `extra_arc_ratio` (float): make `(task_num) * (extra_arc_ratio)` of extra arc
 
 Deadline of leaf node is set as `level+1 * (exec_t mean) * 2`
+
+
+---
+
+### Experimental Usage
+
+```
+python experiment.py --dag_num=1000 --iter_size=100 --sl_unit=2 --base='100,200,300' --experiments='None'
+```
+
+### Experimental Parameter
+
+* `dag_num` (integer): How many dags to generate and experiment with.
+* `iter_size` (integer): How many iteration to test per 1 DAG.
+* `base` ([int, int]): Maximum loop count of base method.`[base small, base large]`
+* `experiment` (str): Save experiment result or not. (`acc`, `std`, `density`, `None`)
+* `sl_unit` (float): Execution unit time of Self-Looping node.
+* Please refer experiment.py file to more detailed parameter.

@@ -14,10 +14,10 @@ from sched.priority import calculate_makespan
 from sched.priority import assign_priority, assign_priority_backup
 
 def check_budget(dag, budget_list, acceptance, deadline, cpu_num, iter_size, sl_unit) :
-    unacceptable = [0, 0, 0, 0, 0]
-    miss_deadline = [0, 0, 0, 0, 0]
-    critical_failure = [0, 0, 0, 0, 0]
-    makespan = [0, 0, 0, 0, 0]
+    unacceptable = [0, 0, 0, 0]
+    miss_deadline = [0, 0, 0, 0]
+    critical_failure = [0, 0, 0, 0]
+    makespan = [0, 0, 0, 0]
 
     default_count = math.floor(score2count(acceptance))
     acceptable_count = max(budget_list) + 1
@@ -51,9 +51,6 @@ def check_budget(dag, budget_list, acceptance, deadline, cpu_num, iter_size, sl_
         dag.task_set[sl_idx].exec_t = sl_unit * min(budget_list[3], acceptable_count)
         makespan[3] = calculate_makespan(dag, cpu_num, False)
 
-        dag.task_set[sl_idx].exec_t = sl_unit * min(budget_list[4], acceptable_count)
-        makespan[4] = calculate_makespan(dag, cpu_num, False)
-
         iterative += 1
         # accumulate things
         for idx, (m, b) in enumerate(zip(makespan, budget_list)) :
@@ -76,7 +73,7 @@ if __name__ == '__main__' :
     parser.add_argument('--node_num', type=int, help='#node number in DAG', default=40)
     parser.add_argument('--dag_depth', type=float, help='depth of DAG', default=6.5)
     parser.add_argument('--backup', type=float, help='Backup node execution time rate', default=0.8)
-    parser.add_argument('--sl_unit', type=int, help='SL node execution unit time', default=2)
+    parser.add_argument('--sl_unit', type=float, help='SL node execution unit time', default=2.0)
 
     parser.add_argument('--node_avg', type=int, help='WCET average of nodes', default=40)
     parser.add_argument('--node_std', type=int, help='WCET std of nodes', default=10)
@@ -85,7 +82,7 @@ if __name__ == '__main__' :
     parser.add_argument('--function_std', type=float, help='variance for score function', default=0.05)
     parser.add_argument('--acceptance', type=float, help='Acceptance bar for score function', default=0.85)
 
-    parser.add_argument('--base', type=str, help='list for value of base [small, middle, large]', default='100,200,300')
+    parser.add_argument('--base', type=str, help='list for value of base [small, large]', default='100,200')
     parser.add_argument('--density', type=float, help='(avg execution time * node #) / (deadline * cpu #)', default=0.3)
     parser.add_argument('--dangling', type=float, help='dangling DAG node # / total node #', default=0.2)
 
@@ -120,7 +117,7 @@ if __name__ == '__main__' :
     else :
         raise NotImplementedError
 
-    base_small, base_middle, base_large = [int(b) for b in args.base.split(",")]
+    base_small, base_large = [int(b) for b in args.base.split(",")]
 
     ### test
     dag_param = {
@@ -134,9 +131,9 @@ if __name__ == '__main__' :
     dangling_num = math.ceil(args.node_num * args.dangling)
     acceptance = args.acceptance
 
-    score = [0 for i in range(5)] # Classic, CPC, S, M, L
-    miss = [0 for i in range(5)]
-    critical = [0 for i in range(5)]
+    score = [0 for i in range(4)] # Classic, CPC, S, L
+    miss = [0 for i in range(4)]
+    critical = [0 for i in range(4)]
     continued = 0
 
     if args.experiments not in ['None', 'acc', 'density', 'std'] :
@@ -224,20 +221,19 @@ if __name__ == '__main__' :
             loop_count[1] = max(loop_count)
             
             if args.experiments in ['acc'] :
-                f.write("{},{},{},{},{}\n".format(count2score(loop_count[0]), count2score(loop_count[1]), count2score(base_small), count2score(base_middle), count2score(base_large)))
+                f.write("{},{},{},{}\n".format(count2score(loop_count[0]), count2score(loop_count[1]), count2score(base_small), count2score(base_large)))
 
             ### makespan for classic and CPC
-            budget_list = [loop_count[0], loop_count[1], base_small, base_middle, base_large]
+            budget_list = [loop_count[0], loop_count[1], base_small, base_large]
             unacceptable, miss_deadline, critical_failure = check_budget(dag, budget_list, acceptance, deadline, cpu_num, iter_size, sl_unit)
-            s0, s1, s2, s3, s4 = unacceptable
-            m0, m1, m2, m3, m4 = miss_deadline
-            c0, c1, c2, c3, c4 = critical_failure
+            s0, s1, s2, s3 = unacceptable
+            m0, m1, m2, m3 = miss_deadline
+            c0, c1, c2, c3 = critical_failure
 
             score[0] += s0 ; miss[0] += m0 ; critical[0] += c0
             score[1] += s1 ; miss[1] += m1 ; critical[1] += c1
             score[2] += s2 ; miss[2] += m2 ; critical[2] += c2
             score[3] += s3 ; miss[3] += m3 ; critical[3] += c3
-            score[4] += s4 ; miss[4] += m4 ; critical[4] += c4
 
             j += 1
 
@@ -256,9 +252,9 @@ if __name__ == '__main__' :
     print("critical: ", critical)
 
     if args.experiments in ['density', 'std'] :
-        f.write("{},{},{},{},{}\n".format(*score))
-        f.write("{},{},{},{},{}\n".format(*miss))
-        f.write("{},{},{},{},{}\n".format(*critical))
+        f.write("{},{},{},{}\n".format(*score))
+        f.write("{},{},{},{}\n".format(*miss))
+        f.write("{},{},{},{}\n".format(*critical))
 
     if args.experiments in ['acc', 'density', 'std'] :
         f.close()
