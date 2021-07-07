@@ -16,7 +16,8 @@ from sched.priority import assign_priority, assign_priority_backup
 def check_budget(dag, budget_list, acceptance, deadline, cpu_num, iter_size, sl_unit) :
     unacceptable = [0, 0, 0, 0]
     miss_deadline = [0, 0, 0, 0]
-    critical_failure = [0, 0, 0, 0]
+    both_fail = [0, 0, 0, 0]
+    total_critical_failure = [0, 0, 0, 0]
     makespan = [0, 0, 0, 0]
 
     default_count = math.floor(score2count(acceptance))
@@ -54,15 +55,17 @@ def check_budget(dag, budget_list, acceptance, deadline, cpu_num, iter_size, sl_
         iterative += 1
         # accumulate things
         for idx, (m, b) in enumerate(zip(makespan, budget_list)) :
-            if b < acceptable_count :
+            if b < acceptable_count and m <= deadline:
                 unacceptable[idx] += 1
-            if m > deadline :
+            elif b >= acceptable_count and  m > deadline:
                 miss_deadline[idx] += 1
+            elif b < acceptable_count and  m > deadline:
+                both_fail[idx] += 1
             
             if idx > 1 and (b < acceptable_count or m > deadline) :
-                critical_failure[idx] += 1
+                total_critical_failure[idx] += 1
 
-    return [u/iter_size for u in unacceptable], [d/iter_size for d in miss_deadline], [c/iter_size for c in critical_failure]
+    return [u/iter_size for u in unacceptable], [d/iter_size for d in miss_deadline], [b/iter_size for b in both_fail], [c/iter_size for c in total_critical_failure]
 
 if __name__ == '__main__' :
     parser = argparse.ArgumentParser(description='argparse for test')
@@ -85,6 +88,7 @@ if __name__ == '__main__' :
     parser.add_argument('--base', type=str, help='list for value of base [small, large]', default='100,200')
     parser.add_argument('--density', type=float, help='(avg execution time * node #) / (deadline * cpu #)', default=0.3)
     parser.add_argument('--dangling', type=float, help='dangling DAG node # / total node #', default=0.2)
+    parser.add_argument('--SL_exp', type=int, help='exponential of SL node', default=30)
 
     parser.add_argument('--experiments', type=str, help='experiments guide', default='None')
     args = parser.parse_args()
@@ -108,12 +112,12 @@ if __name__ == '__main__' :
         def count2score(x, std=True) :
             delta = get_noise()
             if std :
-                return max(1 - pow(math.e, -x/50) - math.fabs(delta), 0)
+                return max(1 - pow(math.e, -x/args.SL_exp) - math.fabs(delta), 0)
             else :
-                return 1 - pow(math.e, -x/50)
+                return 1 - pow(math.e, -x/args.SL_exp)
 
         def score2count(score) :
-            return (-50) * math.log(-score+1)
+            return (-args.SL_exp) * math.log(-score+1)
     else :
         raise NotImplementedError
 
@@ -133,6 +137,7 @@ if __name__ == '__main__' :
 
     score = [0 for i in range(4)] # Classic, CPC, S, L
     miss = [0 for i in range(4)]
+    both = [0 for i in range(4)]
     critical = [0 for i in range(4)]
     continued = 0
 
@@ -225,15 +230,16 @@ if __name__ == '__main__' :
 
             ### makespan for classic and CPC
             budget_list = [loop_count[0], loop_count[1], base_small, base_large]
-            unacceptable, miss_deadline, critical_failure = check_budget(dag, budget_list, acceptance, deadline, cpu_num, iter_size, sl_unit)
+            unacceptable, miss_deadline, both_fail, total_critical_failure = check_budget(dag, budget_list, acceptance, deadline, cpu_num, iter_size, sl_unit)
             s0, s1, s2, s3 = unacceptable
             m0, m1, m2, m3 = miss_deadline
-            c0, c1, c2, c3 = critical_failure
+            b0, b1, b2, b3 = both_fail
+            c0, c1, c2, c3 = total_critical_failure
 
-            score[0] += s0 ; miss[0] += m0 ; critical[0] += c0
-            score[1] += s1 ; miss[1] += m1 ; critical[1] += c1
-            score[2] += s2 ; miss[2] += m2 ; critical[2] += c2
-            score[3] += s3 ; miss[3] += m3 ; critical[3] += c3
+            score[0] += s0 ; miss[0] += m0 ; critical[0] += c0 ; both[0] += b0
+            score[1] += s1 ; miss[1] += m1 ; critical[1] += c1 ; both[1] += b1
+            score[2] += s2 ; miss[2] += m2 ; critical[2] += c2 ; both[2] += b2
+            score[3] += s3 ; miss[3] += m3 ; critical[3] += c3 ; both[3] += b3
 
             j += 1
 
@@ -244,16 +250,23 @@ if __name__ == '__main__' :
         except Exception as e:
             print('Continued: ', e)
             continued += 1
+    
+    score = [round(s, 1) for s in score]
+    miss = [round(s, 1) for s in miss]
+    both = [round(s, 1) for s in both]
+    critical = [round(s, 1) for s in critical]
         
     ## sum up all result
     print("Error: ", continued)
     print("Unacceptable: ", score)
     print("Miss deadline: ", miss)
+    print("Both: ", both)
     print("critical: ", critical)
 
     if args.experiments in ['density', 'std'] :
         f.write("{},{},{},{}\n".format(*score))
         f.write("{},{},{},{}\n".format(*miss))
+        f.write("{},{},{},{}\n".format(*both))
         f.write("{},{},{},{}\n".format(*critical))
 
     if args.experiments in ['acc', 'density', 'std'] :
