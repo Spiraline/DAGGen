@@ -100,7 +100,6 @@ if __name__ == '__main__' :
     density = args.density
     sl_unit = args.sl_unit
 
-    ### TODO: Implement more function type and set proper acceptance bar value.
     func_std = args.function_std
     def get_noise() :
         return normal(0, func_std, 1)
@@ -226,20 +225,30 @@ if __name__ == '__main__' :
             loop_count[1] = max(loop_count)
             
             if args.experiments in ['acc'] :
-                f.write("{},{},{},{}\n".format(count2score(loop_count[0]), count2score(loop_count[1]), count2score(base_small), count2score(base_large)))
+                acc_res = []
+                for max_lc in [loop_count[0], loop_count[1], base_small, base_large]:
+                    tmp_score = 0
+                    for lc in range(0, max_lc+1) : # find first fit
+                        tmp_score = count2score(lc)
+                        if tmp_score > acceptance :
+                            break
+                    
+                    acc_res.append(tmp_score)
 
-            ### makespan for classic and CPC
-            budget_list = [loop_count[0], loop_count[1], base_small, base_large]
-            unacceptable, miss_deadline, both_fail, total_critical_failure = check_budget(dag, budget_list, acceptance, deadline, cpu_num, iter_size, sl_unit)
-            s0, s1, s2, s3 = unacceptable
-            m0, m1, m2, m3 = miss_deadline
-            b0, b1, b2, b3 = both_fail
-            c0, c1, c2, c3 = total_critical_failure
+                f.write("{},{},{},{}\n".format(acc_res[0], acc_res[1], acc_res[2], acc_res[3]))
+            else:
+                ### makespan for classic and CPC
+                budget_list = [loop_count[0], loop_count[1], base_small, base_large]
+                unacceptable, miss_deadline, both_fail, total_critical_failure = check_budget(dag, budget_list, acceptance, deadline, cpu_num, iter_size, sl_unit)
+                s0, s1, s2, s3 = unacceptable
+                m0, m1, m2, m3 = miss_deadline
+                b0, b1, b2, b3 = both_fail
+                c0, c1, c2, c3 = total_critical_failure
 
-            score[0] += s0 ; miss[0] += m0 ; critical[0] += c0 ; both[0] += b0
-            score[1] += s1 ; miss[1] += m1 ; critical[1] += c1 ; both[1] += b1
-            score[2] += s2 ; miss[2] += m2 ; critical[2] += c2 ; both[2] += b2
-            score[3] += s3 ; miss[3] += m3 ; critical[3] += c3 ; both[3] += b3
+                score[0] += s0 ; miss[0] += m0 ; critical[0] += c0 ; both[0] += b0
+                score[1] += s1 ; miss[1] += m1 ; critical[1] += c1 ; both[1] += b1
+                score[2] += s2 ; miss[2] += m2 ; critical[2] += c2 ; both[2] += b2
+                score[3] += s3 ; miss[3] += m3 ; critical[3] += c3 ; both[3] += b3
 
             j += 1
 
