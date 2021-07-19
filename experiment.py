@@ -228,12 +228,15 @@ if __name__ == '__main__' :
                 acc_res = []
                 for max_lc in [loop_count[0], loop_count[1], base_small, base_large]:
                     tmp_score = 0
+                    max_score = 0
                     for lc in range(0, max_lc+1) : # find first fit
                         tmp_score = count2score(lc)
+                        if max_score < tmp_score:
+                            max_score = tmp_score
                         if tmp_score > acceptance :
                             break
                     
-                    acc_res.append(tmp_score)
+                    acc_res.append(max_score)
 
                 f.write("{},{},{},{}\n".format(acc_res[0], acc_res[1], acc_res[2], acc_res[3]))
             else:
