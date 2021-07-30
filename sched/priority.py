@@ -170,37 +170,37 @@ def calculate_makespan(dag, core_num, backup=False) :
     else :
         return makespan(dag, core_num)
 
-def makespan(dag, core_num) :
+def makespan(dag, core_num):
     dag_len = len(dag.task_set)
     priority_list = assign_priority(dag, [i for i in range(dag_len)], [i for i in range(dag_len)])
     priority_pair = []
     waiting = []
     queue = PriorityQueue()
     
-    visited = [False for i in range(len(priority_list))] # priority pair + back
+    visited = [False for i in range(len(priority_list))]  # priority pair + back
     available = [0 for i in range(core_num)]
     execute = [-1 for i in range(core_num)]
     time = 0
 
-    for i, p in enumerate(priority_list) : 
+    for i, p in enumerate(priority_list):
         priority_pair.append((p*(-1), i))
         waiting.append(len(dag.task_set[i].parent))
-        if waiting[i]==0 :
+        if waiting[i] == 0:
             visited[i] = True
             queue.put(priority_pair[i])
 
-    while True :
-        if queue.empty() :
-            if all([e==-1 for e in execute]) : # all done
+    while True:
+        if queue.empty():
+            if all([e == -1 for e in execute]):  # all done
                 break
-            elif any([e==-1 for e in execute]) : # some available
+            elif any([e == -1 for e in execute]):  # some available
                 min_val, loc = find_minimum_nonzero(available)
-            else : # all busy
+            else:  # all busy
                 min_val = min(available)
                 loc = available.index(min_val)
 
             time += min_val
-            available = [max(a-min_val, 0) for a in available]
+            available = [max(a - min_val, 0) for a in available]
 
             for child in dag.task_set[execute[loc]].child :
                 waiting[child] -= 1
@@ -209,8 +209,8 @@ def makespan(dag, core_num) :
             
             execute[loc] = -1
 
-        else :
-            if any([e==-1 for e in execute]) : # some available (1 or all)
+        else:
+            if any([e == -1 for e in execute]):  # some available (1 or all)
                 min_val = min(available)
                 loc = available.index(min_val)
 
@@ -219,30 +219,31 @@ def makespan(dag, core_num) :
                 available[loc] = dag.task_set[i].exec_t
                 execute[loc] = i
 
-            else : # all busy
+            else:  # all busy
                 min_val = min(available)
                 loc = available.index(min_val)
 
                 time += min_val
                 available = [a-min_val for a in available]
 
-                for child in dag.task_set[execute[loc]].child :
+                for child in dag.task_set[execute[loc]].child:
                     waiting[child] -= 1
-                    if waiting[child] == 0 :
+                    if waiting[child] == 0:
                         queue.put(priority_pair[child])
 
                 execute[loc] = -1
 
-        for i in range(core_num) :
-            if execute[i] != -1 and available[i]==0.0 :
-                for child in dag.task_set[execute[i]].child :
+        for i in range(core_num):
+            if execute[i] != -1 and available[i] == 0.0:
+                for child in dag.task_set[execute[i]].child:
                     waiting[child] -= 1
-                    if waiting[child] == 0 :
+                    if waiting[child] == 0:
                         queue.put(priority_pair[child])
                 execute[i] = -1
     return time
 
-def makespan_backup(dag, core_num) :
+
+def makespan_backup(dag, core_num):
     dag_len = len(dag.task_set)
     priority_list = assign_priority(dag, [i for i in range(dag_len)], [i for i in range(dag_len)])
 
@@ -255,7 +256,7 @@ def makespan_backup(dag, core_num) :
     execute = [-1 for i in range(core_num)]
     time = 0
 
-    for i, p in enumerate(priority_list) : 
+    for i, p in enumerate(priority_list):
         priority_pair.append((p*(-1), i))
         waiting.append(len(dag.task_set[i].parent))
         if waiting[i]==0 :
@@ -265,13 +266,13 @@ def makespan_backup(dag, core_num) :
     priority_list.append(max(priority_list))
     priority_pair.append((priority_list[-1]*(-1), dag_len))
     waiting.append(0)
-    for t in dag.task_set :
+    for t in dag.task_set:
         if len(inter(t.child, dag.dangling_dag)) != 0 and t.tid not in dag.dangling_dag:
             waiting[-1] += 1
     
     critical_path = calculate_critical_path(dag, [i for i in range(dag_len)])
     next_level = max([dag.task_set[d].level for d in dag.dangling_dag])
-    if next_level == len(critical_path) - 1 :
+    if next_level == len(critical_path) - 1:
         next_level = -1
 
     while True :

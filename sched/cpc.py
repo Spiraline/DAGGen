@@ -84,6 +84,15 @@ class CPCBound:
     def cvt(self, i) :
         return i
 
+    def get_esmax(self, deadline, sl_idx):
+        sum_critical_path = 0
+        for idx in self.critical_path:
+            if idx is not sl_idx:
+                sum_critical_path += self.node_set[idx].exec_t
+        esmax = deadline - sum_critical_path
+        # print('deadline: ', deadline, 'sl_idx: ', sl_idx, sum_critical_path, esmax)
+        return esmax
+
     def generate_node_set(self):
         for i in range(len(self.task_set)):
             node_param = {
@@ -646,7 +655,7 @@ class CPCBound:
                         interference += self.node_set[j].actual_delay
                     interference /= self.core_num
                     interference = math.ceil(interference)
-
+            # print('cpc debug', length_i, beta_i, interference)
             response_time_i = length_i + beta_i + interference
             sum_response_time += response_time_i
         return sum_response_time

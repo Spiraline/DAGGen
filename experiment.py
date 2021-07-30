@@ -22,7 +22,7 @@ def check_budget(dag, budget_list, acceptance, deadline, cpu_num, iter_size, sl_
 
     default_count = math.floor(score2count(acceptance))
     acceptable_count = max(budget_list) + 1
-    
+    # print(default_count, acceptable_count, "what is this?")
     iterative = 0
     while iterative < iter_size :
         # find unacceptable or miss deadline cases for iter_size times
@@ -34,7 +34,9 @@ def check_budget(dag, budget_list, acceptance, deadline, cpu_num, iter_size, sl_
                 break
 
         # check makespan
+
         dag.task_set[sl_idx].exec_t = sl_unit * min(budget_list[0], acceptable_count)
+        # print(dag.task_set[sl_idx].exec_t)
         if budget_list[0] >= acceptable_count : # success case
             makespan[0] = calculate_makespan(dag, cpu_num, False)
         else : # failure case
@@ -43,8 +45,12 @@ def check_budget(dag, budget_list, acceptance, deadline, cpu_num, iter_size, sl_
         dag.task_set[sl_idx].exec_t = sl_unit * min(budget_list[1], acceptable_count)
         if budget_list[1] >= acceptable_count : # success case
             makespan[1] = calculate_makespan(dag, cpu_num, False)
+            # if makespan[1] > deadline:
+            #     print('fault', makespan[1])
         else : # failure case
             makespan[1] = calculate_makespan(dag, cpu_num, True)
+            # if makespan[1] > deadline:
+            #     print('fault', makespan[1])
 
         dag.task_set[sl_idx].exec_t = sl_unit * min(budget_list[2], acceptable_count)
         makespan[2] = calculate_makespan(dag, cpu_num, False)
@@ -54,20 +60,22 @@ def check_budget(dag, budget_list, acceptance, deadline, cpu_num, iter_size, sl_
 
         iterative += 1
         # accumulate things
-        for idx, (m, b) in enumerate(zip(makespan, budget_list)) :
+        for idx, (m, b) in enumerate(zip(makespan, budget_list)):
+            # print(idx, m, b)
             if b < acceptable_count and m <= deadline:
                 unacceptable[idx] += 1
-            elif b >= acceptable_count and  m > deadline:
+            elif b >= acceptable_count and m > deadline:
                 miss_deadline[idx] += 1
-            elif b < acceptable_count and  m > deadline:
+            elif b < acceptable_count and m > deadline:
                 both_fail[idx] += 1
             
-            if idx > 1 and (b < acceptable_count or m > deadline) :
+            if idx > 1 and (b < acceptable_count or m > deadline):
                 total_critical_failure[idx] += 1
 
     return [u/iter_size for u in unacceptable], [d/iter_size for d in miss_deadline], [b/iter_size for b in both_fail], [c/iter_size for c in total_critical_failure]
 
-if __name__ == '__main__' :
+
+if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='argparse for test')
     parser.add_argument('--dag_num', type=int, help='Test DAG number', default=100)
     parser.add_argument('--iter_size', type=int, help='#iterative per 1 DAG', default=100)
@@ -155,6 +163,7 @@ if __name__ == '__main__' :
 
     j = 0
     while j < dag_num :
+        # print(j, dag_num)
         try :
             Task.idx = 0
             dag, cp, sl_idx = SelfLoopingDag(dag_param, dangling_num)
@@ -176,52 +185,62 @@ if __name__ == '__main__' :
 
             ## check failure of every method(classic, CPC, 3 base)
             loop_count = [0, 0]
-            cpc_min_exect = deadline
 
             classic_budget = classic.calculate_budget(sl_idx, deadline, cpu_num)
             classic_bbudget = classic_b.calculate_budget(sl_idx, deadline, cpu_num)
 
             loop_count[0] = math.floor(min(classic_budget, classic_bbudget) / sl_exec_t)
 
-            start = 0
-            end = math.floor(cpc_min_exect / sl_exec_t)
+            es_max = cpc.get_esmax(deadline, sl_idx)
+            es_init = 0
+            loop_init = math.floor(es_init / sl_exec_t)
+            loop_low = max(0, loop_init)
+            loop_high = math.floor(es_max / sl_exec_t)
 
-            while start < end :
-                mid = int((start+end-1)/2)
-                cpc.node_set[sl_idx].exec_t = mid * sl_exec_t
+            # print(bound_priority, bound_priority_backup, deadline, sl_exec_t, loop_high)
+            cpc_response_time = 0
+            cpc_backup_response_time = 0
+            while loop_low < loop_high:
+                loop_mid = int((loop_low + loop_high + 1) / 2)
+                cpc.node_set[sl_idx].exec_t = loop_mid * sl_exec_t
                 cpc_bound = cpc.update_with_priority()
+                cpc_response_time = cpc_bound
+                # print(cpc.node_set[sl_idx].exec_t, cpc_bound)
+                if deadline < cpc_bound:
+                    loop_high = loop_mid - 1
+                else:
+                    loop_low = loop_mid
 
-                if deadline < cpc_bound :
-                    end = mid
-                else :
-                    start = mid+1
+            norm = loop_low
 
-            norm = end
+            es_init = 0
+            loop_init = math.floor(es_init / sl_exec_t)
+            loop_low = max(0, loop_init)
+            loop_high = math.floor(es_max / sl_exec_t)
 
-            start = 0
-            end = math.floor(cpc_min_exect / sl_exec_t)
+            while loop_low < loop_high :
+                loop_mid = int((loop_low + loop_high + 1) / 2)
 
-            while start < end :
-                mid = int((start+end-1)/2)
-
-                cpc_b.node_set[cpc_b.cvt(sl_idx)].exec_t = mid * sl_exec_t
+                cpc_b.node_set[cpc_b.cvt(sl_idx)].exec_t = loop_mid * sl_exec_t
                 cpc_bbound = cpc_b.update_with_priority()
-
+                cpc_backup_response_time = cpc_bbound
                 if deadline < cpc_bbound :
-                    end = mid
+                    loop_high = loop_mid - 1
                 else :
-                    start = mid+1
+                    loop_low = loop_mid
 
-            err = end
-
+            err = loop_low
             loop_count[1] = min(norm, err)
+            if cpc_response_time > deadline or cpc_backup_response_time > deadline:
+                continue
 
             if any([l <= 1 for l in loop_count]) :
                 print("Continued - Non-feasible CPC({}, {})".format(norm, err))
                 continue
 
             print(">[{}] {} {} - cpc({},{}) | deadline: {}".format(j, loop_count[0], loop_count[1], norm, err, deadline))
-
+            # if classic result is good, then use it
+            # print(loop_count[0], loop_count[1])
             loop_count[1] = max(loop_count)
             
             if args.experiments in ['acc'] :
@@ -245,6 +264,10 @@ if __name__ == '__main__' :
                 unacceptable, miss_deadline, both_fail, total_critical_failure = check_budget(dag, budget_list, acceptance, deadline, cpu_num, iter_size, sl_unit)
                 s0, s1, s2, s3 = unacceptable
                 m0, m1, m2, m3 = miss_deadline
+                # if m0 != 0.0 or m1 != 0.0:
+                #     print(m0, m1, m2, m3)
+                #     print(">[{}] {} {} - cpc({},{}) | deadline: {}".format(j, loop_count[0], loop_count[1], norm, err,
+                #                                                            deadline))
                 b0, b1, b2, b3 = both_fail
                 c0, c1, c2, c3 = total_critical_failure
 
