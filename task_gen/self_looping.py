@@ -5,6 +5,8 @@ from random import randint, random
 def assign_looping(dag, cp, dangling_num) :
     sl_idx = randint(1, len(cp)-2) # TODO: check invalidness (1 <= len(cp)-2 always..)
     dag.sl_idx = sl_idx
+
+    #print("CP: " + str(cp))
     sl = cp[sl_idx]
     visited = [False for i in range(len(dag.task_set))]
 
@@ -68,21 +70,21 @@ def calculate_critical_path(dag) :
     distance = [0,] * len(dag.task_set)
     indegree = [0,] * len(dag.task_set)
     task_queue = []
-
-    for i in range(len(dag.task_set)) :
+    # print(dag)
+    for i in range(len(dag.task_set)):
         if dag.task_set[i].level == 0 :
             task_queue.append(dag.task_set[i])
             distance[i] = dag.task_set[i].exec_t
 
-    for i, v in enumerate(dag.task_set) :
+    for i, v in enumerate(dag.task_set):
         indegree[i] = len(v.parent)
 
-    while task_queue :
+    while task_queue:
         vertex = task_queue.pop(0)
-        for v in vertex.child :
+        for v in vertex.child:
             distance[v] = max(dag.task_set[v].exec_t + distance[vertex.tid], distance[v]) 
             indegree[v] -= 1
-            if indegree[v] == 0 :
+            if indegree[v] == 0:
                 task_queue.append(dag.task_set[v])    
 
     cp = []

@@ -45,12 +45,12 @@ def check_budget(dag, budget_list, acceptance, deadline, cpu_num, iter_size, sl_
         dag.task_set[sl_idx].exec_t = sl_unit * min(budget_list[1], acceptable_count)
         if budget_list[1] >= acceptable_count : # success case
             makespan[1] = calculate_makespan(dag, cpu_num, False)
-            # if makespan[1] > deadline:
-            #     print('fault', makespan[1])
+            if makespan[1] > deadline:
+                print('fault', makespan[1])
         else : # failure case
             makespan[1] = calculate_makespan(dag, cpu_num, True)
-            # if makespan[1] > deadline:
-            #     print('fault', makespan[1])
+            if makespan[1] > deadline:
+                print('fault', makespan[1])
 
         dag.task_set[sl_idx].exec_t = sl_unit * min(budget_list[2], acceptable_count)
         makespan[2] = calculate_makespan(dag, cpu_num, False)
@@ -132,7 +132,7 @@ if __name__ == '__main__':
 
     ### test
     dag_param = {
-        "node_num": [args.node_num, 10],
+        "node_num": [args.node_num, 0],
         "depth": [args.dag_depth, 1.5],
         "exec_t": [args.node_avg, args.node_std],
         "start_node": [1, 0],
@@ -158,21 +158,23 @@ if __name__ == '__main__':
     elif args.experiments in ['std'] :
         file_name = "std_{}.txt".format(int(float(args.function_std)*100))
 
-    if args.experiments in ['acc', 'density', 'std'] :
+    if args.experiments in ['acc', 'density', 'std']:
         f = open(file_name, 'w')
 
     j = 0
-    while j < dag_num :
+    while j < dag_num:
         # print(j, dag_num)
-        try :
+        try:
+            # print("Number of Nodes: " + str(args.node_num))
             Task.idx = 0
             dag, cp, sl_idx = SelfLoopingDag(dag_param, dangling_num)
             dag.backup = args.node_avg * math.ceil(len(dag.dangling_dag)*args.backup)
 
+            # print(cp)
             classic = ClassicBound(dag.task_set, cpu_num)
             classic_b = ClassicBackup(dag, cpu_num)
-            cpc = CPCBound(dag.task_set, cpu_num)
-            cpc_b = CPCBackup(dag, cpu_num)
+            cpc = CPCBound(dag.task_set, sl_idx, cp, cpu_num)
+            cpc_b = CPCBackup(dag, sl_idx, cp, cpu_num)
 
             priority_list = assign_priority(dag)
             bound_priority = cpc.update_with_priority(priority_list)
@@ -192,11 +194,14 @@ if __name__ == '__main__':
             loop_count[0] = math.floor(min(classic_budget, classic_bbudget) / sl_exec_t)
 
             es_max = cpc.get_esmax(deadline, sl_idx)
-            es_init = 0
+            es_init = cpc.get_esinit(deadline, sl_idx)
+
+
             loop_init = math.floor(es_init / sl_exec_t)
             loop_low = max(0, loop_init)
             loop_high = math.floor(es_max / sl_exec_t)
 
+            # print("es_init: " + str(es_init) + "\tes_max: " + str(es_max) + "\tloop_init: " + str(loop_init) + "\tloop_high: " + str(loop_high))
             # print(bound_priority, bound_priority_backup, deadline, sl_exec_t, loop_high)
             cpc_response_time = 0
             cpc_backup_response_time = 0
@@ -205,7 +210,7 @@ if __name__ == '__main__':
                 cpc.node_set[sl_idx].exec_t = loop_mid * sl_exec_t
                 cpc_bound = cpc.update_with_priority()
                 cpc_response_time = cpc_bound
-                # print(cpc.node_set[sl_idx].exec_t, cpc_bound)
+                print(loop_mid, cpc.node_set[sl_idx].exec_t, cpc_bound)
                 if deadline < cpc_bound:
                     loop_high = loop_mid - 1
                 else:
@@ -213,7 +218,7 @@ if __name__ == '__main__':
 
             norm = loop_low
 
-            es_init = 0
+            es_init = cpc.get_esinit(deadline, sl_idx)
             loop_init = math.floor(es_init / sl_exec_t)
             loop_low = max(0, loop_init)
             loop_high = math.floor(es_max / sl_exec_t)

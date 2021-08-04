@@ -33,16 +33,18 @@ class Node(object):
             self.isSource = True
 
     def __str__(self):
-        return str(self.vid) + "\t" + str(self.level) + "\t" + str(self.exec_t) + "\t" + str(self.pred) + "\t" + str(self.succ)
+        return "NodeNum: " + str(self.vid) + "\t" + "Level: " + str(self.level) + "\t" + "ExecT: " + str(self.exec_t) + "\t" + "PRED: " + str(self.pred) + "\t" + "SUCC: " + str(self.succ)
 
 
 class CPCBound:
-    def __init__(self, task_set, core_num=4):
+    def __init__(self, task_set, sl_idx, cp, core_num=4):
         self.self_looping_idx = -1
+        self.sl_idx = sl_idx
         self.task_set = task_set # G = (V,E)
         self.node_set =[]
         self.core_num = core_num # m
         self.non_critical_nodes = []
+        self.critical_path_extern = cp
         self.critical_path = [] # Theta_i
         self.complete_paths = [] #
         self.provider_group = []
@@ -54,6 +56,7 @@ class CPCBound:
         self.finish_time_consumer_arr = []
         self.alpha_arr = []
         self.beta_arr = []
+        self.response_arr = []
         self.interfere_group_priority = []
         self.priority_list = []
         self.longest_local_path_group = []
@@ -84,14 +87,53 @@ class CPCBound:
     def cvt(self, i) :
         return i
 
+    def get_esinit(self, deadline, sl_idx):
+        # print(sl_idx, len(self.node_set), self.provider_group, self.critical_path)
+        sum_critical_path = 0
+        for idx in self.critical_path:
+            if idx is not sl_idx:
+                sum_critical_path += self.node_set[idx].exec_t
+        self_looping_provider_idx = 0
+        sum_of_exec_except_self_looping = 0
+        for i, provider in enumerate(self.provider_group):
+            if sl_idx in provider:
+                # print(i, sl_idx, self.provider_group, provider)
+                self_looping_provider_idx = i
+                for node_idx in provider:
+                    # print(self.node_set[node_idx].vid, self.node_set[node_idx].exec_t)
+                    if not node_idx == sl_idx:
+                        sum_of_exec_except_self_looping += self.node_set[node_idx].exec_t
+
+        # print(self.provider_group, self_looping_provider_idx, sl_idx)
+        sum_of_response_time_for_front_providers = 0
+        sum_of_response_time_for_lateral_providers = 0
+
+        for i, response_time in enumerate(self.response_arr):
+            if i < self_looping_provider_idx:
+                sum_of_response_time_for_front_providers += response_time
+            if i > self_looping_provider_idx:
+                sum_of_response_time_for_lateral_providers += response_time
+
+        # print("Provider Group: " + str(self.provider_group))
+        # print("Consumer Group: " + str(self.consumer_group))
+        sum_of_consumer = 0
+        for consumer_idx in self.consumer_group[self_looping_provider_idx]:
+            sum_of_consumer += self.node_set[consumer_idx].exec_t
+
+        es_init = deadline - sum_of_response_time_for_front_providers - sum_of_response_time_for_lateral_providers - sum_of_exec_except_self_looping - (sum_of_consumer / self.core_num)
+        # print('deadline: ', deadline, 'sl_idx: ', sl_idx, sum_critical_path, es_init)
+        if es_init < 0:
+            es_init = 0
+        return es_init
+
     def get_esmax(self, deadline, sl_idx):
         sum_critical_path = 0
         for idx in self.critical_path:
             if idx is not sl_idx:
                 sum_critical_path += self.node_set[idx].exec_t
-        esmax = deadline - sum_critical_path
-        # print('deadline: ', deadline, 'sl_idx: ', sl_idx, sum_critical_path, esmax)
-        return esmax
+        es_max = deadline - sum_critical_path
+        # print('deadline: ', deadline, 'sl_idx: ', sl_idx, sum_critical_path, es_max)
+        return es_max
 
     def generate_node_set(self):
         for i in range(len(self.task_set)):
@@ -175,13 +217,17 @@ class CPCBound:
         self.find_complete_path(init_path)
 
         max_exec_t = 0
-        for i in self.complete_paths:
+        for complete_path_i in self.complete_paths:
             len_exec_t = 0
-            for j in i:
-                len_exec_t += self.node_set[j].exec_t
+            for path_node in complete_path_i:
+                len_exec_t += self.node_set[path_node].exec_t
             if len_exec_t > max_exec_t:
                 max_exec_t = len_exec_t
-                self.critical_path = i
+                self.critical_path = complete_path_i
+
+        # Check Critical Path Extern with CPC Critical Path
+        if not (self.critical_path_extern == self.critical_path):
+            self.critical_path = self.critical_path_extern
 
         for node in self.node_set:
             if int(node.vid) not in self.critical_path:
@@ -474,19 +520,28 @@ class CPCBound:
 
     def calculate_bound(self):
         sum_response_time = 0
+        # print("Provider Group: " + str(self.provider_group))
         for theta_i in range(len(self.provider_group)):
             length_i = 0
             for idx in self.provider_group[theta_i]:
                 length_i += self.node_set[idx].exec_t
+                # print("Length Plus: " + str(length_i), str(self.node_set[idx]))
+            # print("Length: " + str(length_i))
             workload_i = 0
+
             union = list(set(self.provider_group[theta_i]) | set(self.consumer_group[theta_i]) | set(self.next_provider_consumer_group[theta_i]))
+            # print("Provider Group: " + str(self.provider_group[theta_i]) + " Consumer Group: " + str(self.consumer_group[theta_i]) + " G Group: " + str(self.next_provider_consumer_group[theta_i]) + " Union Group: " + str(union))
             for idx in union:
                 workload_i += self.node_set[idx].exec_t
             alpha_i = self.alpha_arr[theta_i]
             beta_i = self.beta_arr[theta_i]
 
             response_time_i = length_i + math.ceil((workload_i - length_i - alpha_i - beta_i)/self.core_num) + beta_i
+            self.response_arr.append(response_time_i)
             sum_response_time += response_time_i
+        # print("Response time Group: " + str(self.response_arr))
+        # print("Provider Group: " + str(self.provider_group))
+
         return sum_response_time
 
     def setting_theta(self, self_looping_idx):
@@ -554,7 +609,7 @@ class CPCBound:
     def update_with_priority(self, priority_list=None):
         # print("length:", len(priority_list), "arr:", priority_list)
         # update priority when priority list is given - assume priority list is already updated
-        if priority_list is not None : 
+        if priority_list is not None:
             for idx in range(len(self.node_set)):
                 self.node_set[idx].priority = priority_list[idx]
 
@@ -614,11 +669,12 @@ class CPCBound:
     def calculate_bound_priority(self):
         # print("longest", self.longest_local_path_group)
         sum_response_time = 0
+        # print(self.provider_group)
         for theta_i in range(len(self.provider_group)):
             length_i = 0
             for idx in self.provider_group[theta_i]:
                 length_i += self.node_set[idx].exec_t
-
+            # print(length_i)
             beta_i = self.beta_arr[theta_i]
             interfering_workload = []
             lower_priority_nodes = []
@@ -662,8 +718,9 @@ class CPCBound:
 
 
 class CPCBackup(CPCBound) :
-    def __init__(self, dag, core_num=4):
+    def __init__(self, dag, sl_idx, cp, core_num=4):
         self.dag = dag
+        self.sl_idx = sl_idx
         self.dangling_dag = dag.dangling_dag
         self.backup = dag.backup
         self.backup_parent = dag.backup_parent
@@ -675,6 +732,7 @@ class CPCBackup(CPCBound) :
         self.core_num = core_num # m
         self.non_critical_nodes = []
         self.critical_path = [] # Theta_i
+        self.critical_path_extern = cp
         self.complete_paths = [] #
         self.provider_group = []
         self.consumer_group = []
@@ -685,6 +743,7 @@ class CPCBackup(CPCBound) :
         self.finish_time_consumer_arr = []
         self.alpha_arr = []
         self.beta_arr = []
+        self.response_arr = []
         self.longest_local_path_group = []
 
         self.generate_node_set()
