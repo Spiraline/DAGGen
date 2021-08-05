@@ -109,14 +109,14 @@ if __name__ == '__main__':
     sl_unit = args.sl_unit
 
     func_std = args.function_std
-    def get_noise() :
+    def get_noise():
         return normal(0, func_std, 1)
 
-    if args.function == 'log' :
+    if args.function == 'log':
         def count2score(x) :
             return math.log(x+1) * get_noise()
-    elif args.function == 'e' :
-        def count2score(x, std=True) :
+    elif args.function == 'e':
+        def count2score(x, std=True):
             delta = get_noise()
             if std :
                 return max(1 - pow(math.e, -x/args.SL_exp) - math.fabs(delta), 0)
@@ -181,8 +181,13 @@ if __name__ == '__main__':
 
             backup_priority_list = assign_priority_backup(cpc_b)
             bound_priority_backup = cpc_b.update_with_priority(backup_priority_list)
-            sl_exec_t = sl_unit
 
+            # for node in cpc.node_set:
+            #     print(node)
+            # print("CPC Priority List: " + str(priority_list))
+            # print("CPC Backup Priority List: " + str(backup_priority_list))
+
+            sl_exec_t = sl_unit
             deadline = int((args.node_avg * args.node_num) / (cpu_num * density))
 
             ## check failure of every method(classic, CPC, 3 base)
@@ -194,6 +199,8 @@ if __name__ == '__main__':
             loop_count[0] = math.floor(min(classic_budget, classic_bbudget) / sl_exec_t)
 
             es_max = cpc.get_esmax(deadline, sl_idx)
+            cpc.node_set[sl_idx].exec_t = es_max
+            cpc_bound = cpc.update_with_priority()
             es_init = cpc.get_esinit(deadline, sl_idx)
 
 
@@ -210,12 +217,18 @@ if __name__ == '__main__':
                 cpc.node_set[sl_idx].exec_t = loop_mid * sl_exec_t
                 cpc_bound = cpc.update_with_priority()
                 cpc_response_time = cpc_bound
-                print(loop_mid, cpc.node_set[sl_idx].exec_t, cpc_bound)
+                print("loop_low :" + str(loop_low) + "\tloop_mid: " + str(loop_mid) + "\tloop_high:" + str(loop_high) + "\tself-looping node's execution time: " + str(cpc.node_set[sl_idx].exec_t) + "Response time: " + str(cpc_bound))
+                # print("Response time arr: " + str(cpc.response_arr))
+                # for node in cpc.node_set:
+                #    print("Node id: ", node.vid, "Node exec: ", node.exec_t, "I Group: ",node.interference_group, "Node finish time: ",node.finish_time)
                 if deadline < cpc_bound:
                     loop_high = loop_mid - 1
                 else:
                     loop_low = loop_mid
 
+            cpc.node_set[sl_idx].exec_t = loop_low * sl_exec_t
+            cpc_bound = cpc.update_with_priority()
+            print("loop_low: " + str(loop_low) + "\tcpc_response_time: " + str(cpc_bound))
             norm = loop_low
 
             es_init = cpc.get_esinit(deadline, sl_idx)
@@ -236,8 +249,8 @@ if __name__ == '__main__':
 
             err = loop_low
             loop_count[1] = min(norm, err)
-            if cpc_response_time > deadline or cpc_backup_response_time > deadline:
-                continue
+            # if cpc_response_time > deadline or cpc_backup_response_time > deadline:
+            #    continue
 
             if any([l <= 1 for l in loop_count]) :
                 print("Continued - Non-feasible CPC({}, {})".format(norm, err))

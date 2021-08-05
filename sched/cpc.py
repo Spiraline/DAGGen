@@ -33,11 +33,12 @@ class Node(object):
             self.isSource = True
 
     def __str__(self):
-        return "NodeNum: " + str(self.vid) + "\t" + "Level: " + str(self.level) + "\t" + "ExecT: " + str(self.exec_t) + "\t" + "PRED: " + str(self.pred) + "\t" + "SUCC: " + str(self.succ)
+        return "NodeNum: " + str(self.vid) + "\t" + "Level: " + str(self.level) + "\t" + "ExecT: " + str(self.exec_t) + "\t" + "PRED: " + str(self.pred) + "\t" + "SUCC: " + str(self.succ) + "\t" + "Priority: " + str(self.priority)
 
 
 class CPCBound:
     def __init__(self, task_set, sl_idx, cp, core_num=4):
+        self.priority_list = []
         self.self_looping_idx = -1
         self.sl_idx = sl_idx
         self.task_set = task_set # G = (V,E)
@@ -57,6 +58,7 @@ class CPCBound:
         self.alpha_arr = []
         self.beta_arr = []
         self.response_arr = []
+        self.response_priority_arr = []
         self.interfere_group_priority = []
         self.priority_list = []
         self.longest_local_path_group = []
@@ -93,6 +95,7 @@ class CPCBound:
         for idx in self.critical_path:
             if idx is not sl_idx:
                 sum_critical_path += self.node_set[idx].exec_t
+
         self_looping_provider_idx = 0
         sum_of_exec_except_self_looping = 0
         for i, provider in enumerate(self.provider_group):
@@ -101,27 +104,28 @@ class CPCBound:
                 self_looping_provider_idx = i
                 for node_idx in provider:
                     # print(self.node_set[node_idx].vid, self.node_set[node_idx].exec_t)
-                    if not node_idx == sl_idx:
+                    if node_idx is not sl_idx:
                         sum_of_exec_except_self_looping += self.node_set[node_idx].exec_t
 
         # print(self.provider_group, self_looping_provider_idx, sl_idx)
         sum_of_response_time_for_front_providers = 0
         sum_of_response_time_for_lateral_providers = 0
 
-        for i, response_time in enumerate(self.response_arr):
+        for i, response_time in enumerate(self.response_priority_arr):
             if i < self_looping_provider_idx:
                 sum_of_response_time_for_front_providers += response_time
             if i > self_looping_provider_idx:
                 sum_of_response_time_for_lateral_providers += response_time
 
-        # print("Provider Group: " + str(self.provider_group))
-        # print("Consumer Group: " + str(self.consumer_group))
+        print("Provider Group: " + str(self.provider_group))
+        print("Consumer Group: " + str(self.consumer_group))
         sum_of_consumer = 0
         for consumer_idx in self.consumer_group[self_looping_provider_idx]:
             sum_of_consumer += self.node_set[consumer_idx].exec_t
 
         es_init = deadline - sum_of_response_time_for_front_providers - sum_of_response_time_for_lateral_providers - sum_of_exec_except_self_looping - (sum_of_consumer / self.core_num)
-        # print('deadline: ', deadline, 'sl_idx: ', sl_idx, sum_critical_path, es_init)
+        print(es_init, deadline, sum_of_response_time_for_front_providers, sum_of_response_time_for_lateral_providers, sum_of_exec_except_self_looping, (sum_of_consumer / self.core_num))
+        print('deadline: ', deadline, 'sl_idx: ', sl_idx, sum_critical_path, es_init)
         if es_init < 0:
             es_init = 0
         return es_init
@@ -306,6 +310,7 @@ class CPCBound:
             node.interference_group = []
             union = list(set(node.anc) | set(node.desc))
             node_set = []
+
             for inter in self.node_set:
                 if int(inter.vid) not in node_set and int(inter.vid) != int(node.vid):
                     node_set.append(int(inter.vid))
@@ -610,9 +615,11 @@ class CPCBound:
         # print("length:", len(priority_list), "arr:", priority_list)
         # update priority when priority list is given - assume priority list is already updated
         if priority_list is not None:
+            self.priority_list = priority_list
             for idx in range(len(self.node_set)):
                 self.node_set[idx].priority = priority_list[idx]
 
+        # print(self.priority_list)
         self.update_interfere_group_priority()
         self.update_finish_time_bound_priority()
         self.get_alpha_beta()
@@ -621,6 +628,7 @@ class CPCBound:
 
     def update_interfere_group_priority(self):
         for node in self.node_set:
+            node.interference_group_priority = []
             lower_priority_nodes = []
             for candidate in self.node_set:
                 if int(candidate.vid) in node.interference_group:
@@ -667,6 +675,7 @@ class CPCBound:
             # print(node.vid, node.finish_time)
 
     def calculate_bound_priority(self):
+        self.response_priority_arr = []
         # print("longest", self.longest_local_path_group)
         sum_response_time = 0
         # print(self.provider_group)
@@ -713,12 +722,14 @@ class CPCBound:
                     interference = math.ceil(interference)
             # print('cpc debug', length_i, beta_i, interference)
             response_time_i = length_i + beta_i + interference
+            self.response_priority_arr.append(response_time_i)
             sum_response_time += response_time_i
         return sum_response_time
 
 
 class CPCBackup(CPCBound) :
     def __init__(self, dag, sl_idx, cp, core_num=4):
+        self.priority_list = []
         self.dag = dag
         self.sl_idx = sl_idx
         self.dangling_dag = dag.dangling_dag
