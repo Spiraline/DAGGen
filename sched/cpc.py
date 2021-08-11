@@ -62,6 +62,7 @@ class CPCBound:
         self.interfere_group_priority = []
         self.priority_list = []
         self.longest_local_path_group = []
+        self.old_cp = []
         self.generate_node_set()
         self.get_critical_path()
         self.construct_cpc_model()
@@ -117,15 +118,15 @@ class CPCBound:
             if i > self_looping_provider_idx:
                 sum_of_response_time_for_lateral_providers += response_time
 
-        print("Provider Group: " + str(self.provider_group))
-        print("Consumer Group: " + str(self.consumer_group))
+        # print("Provider Group: " + str(self.provider_group))
+        # print("Consumer Group: " + str(self.consumer_group))
         sum_of_consumer = 0
         for consumer_idx in self.consumer_group[self_looping_provider_idx]:
             sum_of_consumer += self.node_set[consumer_idx].exec_t
 
         es_init = deadline - sum_of_response_time_for_front_providers - sum_of_response_time_for_lateral_providers - sum_of_exec_except_self_looping - (sum_of_consumer / self.core_num)
-        print(es_init, deadline, sum_of_response_time_for_front_providers, sum_of_response_time_for_lateral_providers, sum_of_exec_except_self_looping, (sum_of_consumer / self.core_num))
-        print('deadline: ', deadline, 'sl_idx: ', sl_idx, sum_critical_path, es_init)
+        # print(es_init, deadline, sum_of_response_time_for_front_providers, sum_of_response_time_for_lateral_providers, sum_of_exec_except_self_looping, (sum_of_consumer / self.core_num))
+        # print('deadline: ', deadline, 'sl_idx: ', sl_idx, sum_critical_path, es_init)
         if es_init < 0:
             es_init = 0
         return es_init
@@ -228,7 +229,7 @@ class CPCBound:
             if len_exec_t > max_exec_t:
                 max_exec_t = len_exec_t
                 self.critical_path = complete_path_i
-
+        self.old_cp = self.critical_path
         # Check Critical Path Extern with CPC Critical Path
         if not (self.critical_path_extern == self.critical_path):
             self.critical_path = self.critical_path_extern
@@ -268,9 +269,10 @@ class CPCBound:
             else:
                 theta.append(self.critical_path[idx])
                 self.provider_group.append(theta)
-        # print(self.critical_path)
-        # print(non_critical_nodes)
-        # print(self.provider_group)
+        #print("CP: ", self.critical_path)
+        #print("NCP: ", non_critical_nodes)
+        #print("PG: ", self.provider_group)
+        #print("OCP: ", self.old_cp)
         for idx in range(len(self.provider_group)):
             if idx < len(self.provider_group) - 1:
                 provider = self.provider_group[idx]
@@ -296,8 +298,8 @@ class CPCBound:
                 self.node_set[provider[0]].consumer_next_provider_group = next_provider_consumer_group.copy()
                 non_critical_nodes = list(set(non_critical_nodes) - set(self.node_set[provider[0]].consumer_group))
                 self.next_provider_consumer_group.append(next_provider_consumer_group.copy())
-                # print("F(theta_i)", self.node_set[provider[0]].consumer_group)
-                # print("G(theta_i)", self.node_set[provider[0]].consumer_next_provider_group)
+                #print("F(theta_i)", self.node_set[provider[0]].consumer_group)
+                #print("G(theta_i)", self.node_set[provider[0]].consumer_next_provider_group)
             else:
                 self.consumer_group.append([])
                 self.next_provider_consumer_group.append([])
@@ -622,7 +624,9 @@ class CPCBound:
         # print(self.priority_list)
         self.update_interfere_group_priority()
         self.update_finish_time_bound_priority()
+        # print("Before: ", self.alpha_arr, self.beta_arr)
         self.get_alpha_beta()
+        # print("After: ", self.alpha_arr, self.beta_arr)
         bound = self.calculate_bound_priority()
         return bound
 
@@ -632,7 +636,7 @@ class CPCBound:
             lower_priority_nodes = []
             for candidate in self.node_set:
                 if int(candidate.vid) in node.interference_group:
-                    if candidate.priority > node.priority:
+                    if candidate.priority >= node.priority:
                         node.interference_group_priority.append(int(candidate.vid))
                     elif candidate.priority < node.priority:
                         lower_priority_nodes.append(candidate)
@@ -667,7 +671,7 @@ class CPCBound:
                 sum = 0
                 for idx in node.interference_group_priority:
                     sum += self.node_set[idx].exec_t
-                sum /= (self.core_num - 1)
+                # sum = sum / (self.core_num - 1)
                 interference = math.ceil(sum)
 
             if pred_finish:
@@ -683,16 +687,17 @@ class CPCBound:
             length_i = 0
             for idx in self.provider_group[theta_i]:
                 length_i += self.node_set[idx].exec_t
-            # print(length_i)
             beta_i = self.beta_arr[theta_i]
+            # print(length_i, beta_i)
+
             interfering_workload = []
             lower_priority_nodes = []
             # print("longest", self.longest_local_path_group[theta_i])
             for inter in self.longest_local_path_group[theta_i]:
-                #print(inter, self.node_set[inter].interference_group)
+                # print(inter, self.node_set[inter].interference_group)
                 for j in self.node_set[inter].interference_group:
                     if self.node_set[j].finish_time > self.finish_time_provider_arr[theta_i]:
-                        if self.node_set[j].priority > self.node_set[inter].priority:
+                        if self.node_set[j].priority >= self.node_set[inter].priority:
                             interfering_workload.append(int(self.node_set[j].vid))
                         elif self.node_set[j].priority < self.node_set[inter].priority:
                             lower_priority_nodes.append(self.node_set[j])
@@ -756,7 +761,7 @@ class CPCBackup(CPCBound) :
         self.beta_arr = []
         self.response_arr = []
         self.longest_local_path_group = []
-
+        self.old_cp = []
         self.generate_node_set()
         self.get_critical_path()
         self.construct_cpc_model()

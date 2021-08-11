@@ -164,15 +164,17 @@ def find_minimum_nonzero(input) :
     return min_val, min_idx
 
 
-def calculate_makespan(dag, core_num, backup=False) :
+def calculate_makespan(dag, core_num, priority_list_extern, backup_priority_list_extern, backup=False):
     if backup :
-        return makespan_backup(dag, core_num)
+        return makespan_backup(dag, core_num, priority_list_extern)
     else :
-        return makespan(dag, core_num)
+        return makespan(dag, core_num, priority_list_extern)
 
-def makespan(dag, core_num):
+def makespan(dag, core_num, priority_list_extern):
     dag_len = len(dag.task_set)
-    priority_list = assign_priority(dag, [i for i in range(dag_len)], [i for i in range(dag_len)])
+    # priority_list = assign_priority(dag, [i for i in range(dag_len)], [i for i in range(dag_len)])
+    priority_list = priority_list_extern
+    # print("MakeSpan Priority List: " + str(priority_list))
     priority_pair = []
     waiting = []
     queue = PriorityQueue()
@@ -204,7 +206,8 @@ def makespan(dag, core_num):
 
             for child in dag.task_set[execute[loc]].child :
                 waiting[child] -= 1
-                if waiting[child] == 0 :
+                if waiting[child] == 0:
+                    visited[child] = True
                     queue.put(priority_pair[child])
             
             execute[loc] = -1
@@ -218,17 +221,20 @@ def makespan(dag, core_num):
 
                 available[loc] = dag.task_set[i].exec_t
                 execute[loc] = i
+                # print("time: ", time, "Min_val: ", min_val, "Loc: ", loc, "Available ", available, "Execute ", execute)
 
             else:  # all busy
+                # print("time: ", time, "Min_val: ", min_val, "Loc: ", loc, "Available ", available, "Execute ", execute)
                 min_val = min(available)
                 loc = available.index(min_val)
 
                 time += min_val
                 available = [a-min_val for a in available]
-
+                # print("time: ", time, "Min_val: ", min_val, "Loc: ", loc, "Available ", available, "Execute ", execute)
                 for child in dag.task_set[execute[loc]].child:
                     waiting[child] -= 1
                     if waiting[child] == 0:
+                        visited[child] = True
                         queue.put(priority_pair[child])
 
                 execute[loc] = -1
@@ -238,15 +244,20 @@ def makespan(dag, core_num):
                 for child in dag.task_set[execute[i]].child:
                     waiting[child] -= 1
                     if waiting[child] == 0:
+                        visited[child] = True
                         queue.put(priority_pair[child])
                 execute[i] = -1
+    # print(visited)
     return time
 
 
-def makespan_backup(dag, core_num):
+def makespan_backup(dag, core_num, priority_list_extern):
     dag_len = len(dag.task_set)
+    # print(dag_len)
     priority_list = assign_priority(dag, [i for i in range(dag_len)], [i for i in range(dag_len)])
-
+    # print(len(priority_list))
+    # print(len(priority_list_extern))
+    #priority_list = priority_list_extern
     priority_pair = []
     waiting = []
     queue = PriorityQueue()

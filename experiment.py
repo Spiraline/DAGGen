@@ -13,7 +13,7 @@ from sched.cpc import CPCBound, CPCBackup
 from sched.priority import calculate_makespan
 from sched.priority import assign_priority, assign_priority_backup
 
-def check_budget(dag, budget_list, acceptance, deadline, cpu_num, iter_size, sl_unit) :
+def check_budget(dag, budget_list, acceptance, deadline, cpu_num, iter_size, sl_unit, priority_list_extern, backup_priority_list_extern) :
     unacceptable = [0, 0, 0, 0]
     miss_deadline = [0, 0, 0, 0]
     both_fail = [0, 0, 0, 0]
@@ -38,25 +38,25 @@ def check_budget(dag, budget_list, acceptance, deadline, cpu_num, iter_size, sl_
         dag.task_set[sl_idx].exec_t = sl_unit * min(budget_list[0], acceptable_count)
         # print(dag.task_set[sl_idx].exec_t)
         if budget_list[0] >= acceptable_count : # success case
-            makespan[0] = calculate_makespan(dag, cpu_num, False)
+            makespan[0] = calculate_makespan(dag, cpu_num, priority_list_extern, backup_priority_list_extern, False)
         else : # failure case
-            makespan[0] = calculate_makespan(dag, cpu_num, True)
+            makespan[0] = calculate_makespan(dag, cpu_num, priority_list_extern, backup_priority_list_extern, True)
 
         dag.task_set[sl_idx].exec_t = sl_unit * min(budget_list[1], acceptable_count)
         if budget_list[1] >= acceptable_count : # success case
-            makespan[1] = calculate_makespan(dag, cpu_num, False)
+            makespan[1] = calculate_makespan(dag, cpu_num, priority_list_extern, backup_priority_list_extern, False)
             if makespan[1] > deadline:
                 print('fault', makespan[1])
         else : # failure case
-            makespan[1] = calculate_makespan(dag, cpu_num, True)
+            makespan[1] = calculate_makespan(dag, cpu_num, priority_list_extern, backup_priority_list_extern, True)
             if makespan[1] > deadline:
                 print('fault', makespan[1])
 
         dag.task_set[sl_idx].exec_t = sl_unit * min(budget_list[2], acceptable_count)
-        makespan[2] = calculate_makespan(dag, cpu_num, False)
+        makespan[2] = calculate_makespan(dag, cpu_num, priority_list_extern, backup_priority_list_extern, False)
 
         dag.task_set[sl_idx].exec_t = sl_unit * min(budget_list[3], acceptable_count)
-        makespan[3] = calculate_makespan(dag, cpu_num, False)
+        makespan[3] = calculate_makespan(dag, cpu_num, priority_list_extern, backup_priority_list_extern, False)
 
         iterative += 1
         # accumulate things
@@ -174,6 +174,7 @@ if __name__ == '__main__':
             classic = ClassicBound(dag.task_set, cpu_num)
             classic_b = ClassicBackup(dag, cpu_num)
             cpc = CPCBound(dag.task_set, sl_idx, cp, cpu_num)
+            # print("---------------------")
             cpc_b = CPCBackup(dag, sl_idx, cp, cpu_num)
 
             priority_list = assign_priority(dag)
@@ -182,6 +183,8 @@ if __name__ == '__main__':
             backup_priority_list = assign_priority_backup(cpc_b)
             bound_priority_backup = cpc_b.update_with_priority(backup_priority_list)
 
+            # print(dag)
+            # print(cpc.provider_group)
             # for node in cpc.node_set:
             #     print(node)
             # print("CPC Priority List: " + str(priority_list))
@@ -217,7 +220,7 @@ if __name__ == '__main__':
                 cpc.node_set[sl_idx].exec_t = loop_mid * sl_exec_t
                 cpc_bound = cpc.update_with_priority()
                 cpc_response_time = cpc_bound
-                print("loop_low :" + str(loop_low) + "\tloop_mid: " + str(loop_mid) + "\tloop_high:" + str(loop_high) + "\tself-looping node's execution time: " + str(cpc.node_set[sl_idx].exec_t) + "Response time: " + str(cpc_bound))
+                # print("loop_low :" + str(loop_low) + "\tloop_mid: " + str(loop_mid) + "\tloop_high:" + str(loop_high) + "\tself-looping node's execution time: " + str(cpc.node_set[sl_idx].exec_t) + "Response time: " + str(cpc_bound))
                 # print("Response time arr: " + str(cpc.response_arr))
                 # for node in cpc.node_set:
                 #    print("Node id: ", node.vid, "Node exec: ", node.exec_t, "I Group: ",node.interference_group, "Node finish time: ",node.finish_time)
@@ -228,7 +231,7 @@ if __name__ == '__main__':
 
             cpc.node_set[sl_idx].exec_t = loop_low * sl_exec_t
             cpc_bound = cpc.update_with_priority()
-            print("loop_low: " + str(loop_low) + "\tcpc_response_time: " + str(cpc_bound))
+            # print("loop_low: " + str(loop_low) + "\tcpc_response_time: " + str(cpc_bound))
             norm = loop_low
 
             es_init = cpc.get_esinit(deadline, sl_idx)
@@ -260,7 +263,7 @@ if __name__ == '__main__':
             # if classic result is good, then use it
             # print(loop_count[0], loop_count[1])
             loop_count[1] = max(loop_count)
-            
+            # loop_count[1] = loop_count[1] + loop_count[0] / 2
             if args.experiments in ['acc'] :
                 acc_res = []
                 for max_lc in [loop_count[0], loop_count[1], base_small, base_large]:
@@ -279,7 +282,7 @@ if __name__ == '__main__':
             else:
                 ### makespan for classic and CPC
                 budget_list = [loop_count[0], loop_count[1], base_small, base_large]
-                unacceptable, miss_deadline, both_fail, total_critical_failure = check_budget(dag, budget_list, acceptance, deadline, cpu_num, iter_size, sl_unit)
+                unacceptable, miss_deadline, both_fail, total_critical_failure = check_budget(dag, budget_list, acceptance, deadline, cpu_num, iter_size, sl_unit, priority_list, backup_priority_list)
                 s0, s1, s2, s3 = unacceptable
                 m0, m1, m2, m3 = miss_deadline
                 # if m0 != 0.0 or m1 != 0.0:
