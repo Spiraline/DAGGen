@@ -39,18 +39,24 @@ def check_budget(dag, budget_list, acceptance, deadline, cpu_num, iter_size, sl_
         # print(dag.task_set[sl_idx].exec_t)
         if budget_list[0] >= acceptable_count : # success case
             makespan[0] = calculate_makespan(dag, cpu_num, priority_list_extern, backup_priority_list_extern, False)
+            # if makespan[0] > deadline:
+            #     print('succ fault', makespan[0])
         else : # failure case
             makespan[0] = calculate_makespan(dag, cpu_num, priority_list_extern, backup_priority_list_extern, True)
+            # if makespan[0] > deadline:
+            #     print('fail fault', makespan[0])
 
         dag.task_set[sl_idx].exec_t = sl_unit * min(budget_list[1], acceptable_count)
         if budget_list[1] >= acceptable_count : # success case
             makespan[1] = calculate_makespan(dag, cpu_num, priority_list_extern, backup_priority_list_extern, False)
             if makespan[1] > deadline:
-                print('fault', makespan[1])
+                print('succ fault', makespan[1])
+                print(dag)
         else : # failure case
             makespan[1] = calculate_makespan(dag, cpu_num, priority_list_extern, backup_priority_list_extern, True)
-            if makespan[1] > deadline:
-                print('fault', makespan[1])
+            # if makespan[1] > deadline:
+                # print('fail fault', makespan[1])
+                # print(dag)
 
         dag.task_set[sl_idx].exec_t = sl_unit * min(budget_list[2], acceptable_count)
         makespan[2] = calculate_makespan(dag, cpu_num, priority_list_extern, backup_priority_list_extern, False)
@@ -81,7 +87,7 @@ if __name__ == '__main__':
     parser.add_argument('--iter_size', type=int, help='#iterative per 1 DAG', default=100)
 
     parser.add_argument('--cpu_num', type=int, help='#cpu', default=4)
-    parser.add_argument('--node_num', type=int, help='#node number in DAG', default=40)
+    parser.add_argument('--node_num', type=int, help='#node number in DAG', default=20)
     parser.add_argument('--dag_depth', type=float, help='depth of DAG', default=6.5)
     parser.add_argument('--backup', type=float, help='Backup node execution time rate', default=0.8)
     parser.add_argument('--sl_unit', type=float, help='SL node execution unit time', default=2.0)
@@ -168,12 +174,16 @@ if __name__ == '__main__':
             # print("Number of Nodes: " + str(args.node_num))
             Task.idx = 0
             dag, cp, sl_idx = SelfLoopingDag(dag_param, dangling_num)
+            # dag, cp, sl_idx = SelfLoopingDag("input/input_debug_20_3.txt", dangling_num)
             dag.backup = args.node_avg * math.ceil(len(dag.dangling_dag)*args.backup)
-
+            # print(dag)
+            # print("sl_idx", type(sl_idx), sl_idx)
+            # sl_idx = int(3)
             # print(cp)
             classic = ClassicBound(dag.task_set, cpu_num)
             classic_b = ClassicBackup(dag, cpu_num)
             cpc = CPCBound(dag.task_set, sl_idx, cp, cpu_num)
+
             # print("---------------------")
             cpc_b = CPCBackup(dag, sl_idx, cp, cpu_num)
 
@@ -303,9 +313,9 @@ if __name__ == '__main__':
             if args.experiments in ['acc', 'density', 'std'] :
                 f.close()
             sys.exit()
-        except Exception as e:
-            print('Continued: ', e)
-            continued += 1
+        # except Exception as e:
+        #     print('Continued: ', e)
+        #     continued += 1
     
     score = [round(s, 1) for s in score]
     miss = [round(s, 1) for s in miss]

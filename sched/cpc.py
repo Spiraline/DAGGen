@@ -834,7 +834,7 @@ class CPCBackup(CPCBound) :
             v_j.anc = self.find_ancestor(v_j.pred)
             v_j.desc = self.find_descendant(v_j.succ)
 
-    def cvt(self, i) :
+    def cvt(self, i):
         return self.node_dict[i]
 
     def get_critical_path(self) :

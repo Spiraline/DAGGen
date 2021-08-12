@@ -62,6 +62,6 @@ class DAGFile(object):
         return ''
 
 if __name__ == "__main__":
-    dag = DAGFile("./input1.txt")
+    dag = DAGFile("../input/input_debug_20.txt")
 
     print(dag)
