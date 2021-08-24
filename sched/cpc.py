@@ -671,7 +671,7 @@ class CPCBound:
                 sum = 0
                 for idx in node.interference_group_priority:
                     sum += self.node_set[idx].exec_t
-                # sum = sum / (self.core_num - 1)
+                sum = sum / (self.core_num - 1)
                 interference = math.ceil(sum)
 
             if pred_finish:

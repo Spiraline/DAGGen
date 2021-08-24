@@ -174,7 +174,7 @@ def makespan(dag, core_num, priority_list_extern):
     dag_len = len(dag.task_set)
     # priority_list = assign_priority(dag, [i for i in range(dag_len)], [i for i in range(dag_len)])
     priority_list = priority_list_extern
-    # print("MakeSpan Priority List: " + str(priority_list))
+    print("MakeSpan Priority List: " + str(priority_list))
     priority_pair = []
     waiting = []
     queue = PriorityQueue()
