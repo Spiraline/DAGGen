@@ -1,5 +1,5 @@
 from .dag_file import DAGFile
-from .dag_gen import DAGGen
+from .dag_gen import DAGGen, Task
 from random import randint, random
 
 def assign_looping(dag, cp, dangling_num) :
@@ -54,6 +54,18 @@ def assign_looping(dag, cp, dangling_num) :
 
     assigned_list.remove(sl)
     dag.dangling_dag = assigned_list
+    # backup_task = Task({"name":"backup", "exec_t":dag.backup})
+
+    # for i, tt in enumerate(dag.task_set) :
+    #     if i in dag.dangling_dag :
+    #         continue
+    #     if set(dag.dangling_dag) & set(tt.child) : # any intersection
+    #         backup_task.parent.append(i)
+    #     if set(dag.dangling_dag) & set(tt.parent) :
+    #         backup_task.child.append(i)
+
+    # dag.task_set.append(backup_task)
+
     return dag, sl
 
 def argmax(value_list, index_list=None):
@@ -133,8 +145,8 @@ def SelfLoopingDag(dag_input, dangling_num) :
                     dag.backup_child.append(child)
                     dag.task_set[child].parent_b.append(dag_len)
 
-    dag.backup_parent.append(dag.sl_idx)
-    dag.task_set[dag.sl_idx].child_b.append(dag_len)
+    dag.backup_parent.append(dag.critical_path[dag.sl_idx])
+    dag.task_set[dag.critical_path[dag.sl_idx]].child_b.append(dag_len)
 
     for i in range(len(dag.task_set)) :
         dag.task_set[i].parent_b = list(set(dag.task_set[i].parent_b))
@@ -142,5 +154,13 @@ def SelfLoopingDag(dag_input, dangling_num) :
 
     dag.backup_parent = list(set(dag.backup_parent))
     dag.backup_child = list(set(dag.backup_child))
+    # print("> ", dag.sl_idx, dag.dangling_dag)
+    dag.critical_path_backup = []
+    for c in dag.critical_path :
+        if c in dag.dangling_dag and len(dag.task_set) not in dag.critical_path_backup :
+            dag.critical_path_backup.append(len(dag.task_set))
+        
+        if c not in dag.dangling_dag :
+            dag.critical_path_backup.append(c)
 
     return dag, dag.critical_path, sl

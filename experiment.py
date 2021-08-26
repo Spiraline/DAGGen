@@ -49,9 +49,9 @@ def check_budget(dag, budget_list, acceptance, deadline, cpu_num, iter_size, sl_
         dag.task_set[sl_idx].exec_t = sl_unit * min(budget_list[1], acceptable_count)
         if budget_list[1] >= acceptable_count : # success case
             makespan[1] = calculate_makespan(dag, cpu_num, priority_list_extern, backup_priority_list_extern, False)
-            if makespan[1] > deadline:
-                print('succ fault', makespan[1])
-                # print(dag)
+            # if makespan[1] > deadline:
+            #     print('succ fault', makespan[1])
+            #     print(dag)
         else : # failure case
             makespan[1] = calculate_makespan(dag, cpu_num, priority_list_extern, backup_priority_list_extern, True)
             # if makespan[1] > deadline:
@@ -173,13 +173,10 @@ if __name__ == '__main__':
         try:
             # print("Number of Nodes: " + str(args.node_num))
             Task.idx = 0
-            # dag, cp, sl_idx = SelfLoopingDag(dag_param, dangling_num)
-            dag, cp, sl_idx = SelfLoopingDag("input/input_debug_20_5.txt", dangling_num)
+            dag, cp, sl_idx = SelfLoopingDag(dag_param, dangling_num)
+            #dag, cp, sl_idx = SelfLoopingDag("input/input_debug_20_5.txt", dangling_num)
             dag.backup = args.node_avg * math.ceil(len(dag.dangling_dag)*args.backup)
             # print(dag)
-            print("sl_idx", type(sl_idx), sl_idx)
-            # sl_idx = 4
-            # print(cp)
             classic = ClassicBound(dag.task_set, cpu_num)
             classic_b = ClassicBackup(dag, cpu_num)
             cpc = CPCBound(dag.task_set, sl_idx, cp, cpu_num)
