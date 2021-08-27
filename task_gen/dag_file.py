@@ -28,12 +28,13 @@ class DAGFile(object):
         ### 2. Add edge
         for i in range(self.node_num) :
             line = f.readline()
-            if not line : break
+            if not line: break
             edge = line.strip().split(' ')
             for j, e in enumerate(edge) :
                 if e == '1' :
                     self.task_set[i].child.append(j)
                     self.task_set[j].parent.append(i)
+            # print(i, self.task_set[i].child)
 
         ### 3. Add some attribute
         for i, task in enumerate(self.task_set) :

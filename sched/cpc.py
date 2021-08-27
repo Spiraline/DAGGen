@@ -2,33 +2,27 @@ import math
 
 class Node(object):
     def __init__(self, **kwargs):
-        # make a node with a task information
-        self.vid = kwargs.get('vid', 0)  # v_j
-        self.exec_t = kwargs.get('exec_t', 30.0)
+        # Variables for node information
+        self.vid = kwargs.get('vid', 0)                         # v_j, node id
+        self.exec_t = kwargs.get('exec_t', 30.0)                # node's execution time
+        self.pred = kwargs.get('pred', [])                      # v_j's predecessors
+        self.succ = kwargs.get('succ', [])                      # v_j's successors
+        self.deadline = kwargs.get('deadline', -1)              # v_j's deadline
+        self.level = kwargs.get('level', -1)                    # v_j's level
+        self.isSink = kwargs.get('isLeaf', False)               # Check value whether this node is sink node or not
 
-        # Node information
-        self.priority = -1
-        self.pred = kwargs.get('pred', [])  # v_j's predecessors
-        self.succ = kwargs.get('succ', [])  # v_j's successors
-        self.anc = []
-        self.desc = []
-        self.alpha = 0
-        self.beta = 0
-        self.actual_delay = 0
+        self.anc = []                                           # A list of v_j's ancestor nodes
+        self.desc = []                                          # A list of v_j's descendent nodes
+        self.concurrent_group = []                              # A list of nodes that can concurrently executes
+        self.non_critical_group = []                            # Intersection of non critical nodes and concurrent nodes
+        self.interference_group = []                            # A list of interfering nodes
+        self.interference_group_priority = []                   # A list of interfering nodes considering priority
 
-        self.isProvider = False
-        self.consumer_group = []  # F(theta_i)
-        self.consumer_next_provider_group = []  # G(theta_i)
-        self.interference_group = []
-        self.interference_group_priority = []
+        self.priority = -1                                      # v_j's priority
+        self.actual_delay = 0                                   # v_j's actual delay from interference group considering priority
+        self.finish_time = -1                                   # v_j's finish time bound
 
-        self.concurrent_group = []
-        self.non_critical_group = []
-        self.isSink = kwargs.get('isLeaf', False)
-        self.isSource = False
-        self.finish_time = -1
-        self.deadline = kwargs.get('deadline', -1)  # v_j's deadline
-        self.level = kwargs.get('level', -1)  # v_j's deadline
+        self.isSource = False                                   # Check value whether this node is source node or not
         if self.level == 0:
             self.isSource = True
 
@@ -38,38 +32,42 @@ class Node(object):
 
 class CPCBound:
     def __init__(self, task_set, sl_idx, cp, core_num=4):
-        self.priority_list = []
-        self.self_looping_idx = -1
-        self.sl_idx = sl_idx
-        self.task_set = task_set # G = (V,E)
-        self.node_set =[]
-        self.core_num = core_num # m
-        self.non_critical_nodes = []
-        self.critical_path_extern = cp
-        self.critical_path = [] # Theta_i
-        self.complete_paths = [] #
-        self.provider_group = []
-        self.consumer_group = []
-        self.local_path_group = []
-        self.next_provider_consumer_group = []
-        self.total_workload = [] # W_i
-        self.finish_time_provider_arr = []
-        self.finish_time_consumer_arr = []
-        self.alpha_arr = []
-        self.beta_arr = []
-        self.response_arr = []
-        self.response_priority_arr = []
-        self.interfere_group_priority = []
-        self.priority_list = []
-        self.longest_local_path_group = []
-        self.old_cp = []
-        self.generate_node_set()
-        self.get_critical_path()
-        self.construct_cpc_model()
-        self.generate_interference_group()
-        self.generate_finish_time_bound()
-        self.get_alpha_beta()
+        # Variables initialization
+        self.priority_list = []                             # Priority list
+        self.self_looping_idx = -1                          # Deprecated
+        self.sl_idx = sl_idx                                # Self-Looping index
+        self.task_set = task_set                            # G = (V,E), task(node) set information from DAG
+        self.node_set = []                                  # Task set with CPC specific information(e.g., finish time bound)
+        self.core_num = core_num                            # The number of core
+        self.non_critical_nodes = []                        # A list of nodes without critical path nodes
+        self.critical_path_extern = cp                      # Critical path from outside of CPC(DAGGen).
+        self.critical_path = []                             # Critical path generated by CPC.
+        self.complete_paths = []                            # A list of complete paths in DAG
+        self.provider_group = []                            # A list of providers
+        self.consumer_group = []                            # A list of consumers
+        self.local_path_group = []                          # A list of local paths
+        self.next_provider_consumer_group = []              # A list of G group in the paper.
+        self.total_workload = []                            # W_i in the paper, the amount of total workload.
+        self.finish_time_provider_arr = []                  # A list that stores all the finish times of provider(theta_i's finish time)
+        self.finish_time_consumer_arr = []                  # A list that stores all the finish times of consumers that have latest finish time bound
+        self.alpha_arr = []                                 # A list of alpha_i
+        self.beta_arr = []                                  # A list of beta_i
+        self.response_arr = []                              # A list of response times of providers
+        self.response_priority_arr = []                     # A list of response times of providers considering priority
+        self.interfere_group_priority = []                  # A list of interfere group considering priority
+        self.longest_local_path_group = []                  # A list of longest local path
+        self.old_cp = []                                    # This is for saving CPC Critical path, because self.critical_path will can be self.critical_path_extern
 
+        # This is when response time bound calculation starts
+        self.generate_node_set()                            # This generates a list of nodes. Please refer to class 'Node', line 3
+        self.get_critical_path()                            # This function generates critical path. Its result can be different with DAGGen critical path
+        self.construct_cpc_model()                          # This function actually fills CPC related variables (e.g., Provider, Consumer, Next Provider's Consumer)
+        self.generate_interference_group()                  # This function generates interference group of each node, it stores the group in the 'Node.interference_group'
+        self.generate_finish_time_bound()                   # This function generates finish time bound of each node, it stores the bound in the 'Node.finish_time'
+        self.get_alpha_beta()                               # This function calculates alpha, beta values of each provider, please refer alpha_arr, beta_arr
+        self.calculate_bound()                              # This function calculates the response time bounds of each provider and get the total response time bound
+
+        # If you want to check the CPC information, please uncomment this
         # print("--------------------------------")
         # print("provider_group: ", self.provider_group)
         # print("consumer_group (F): ", self.consumer_group)
@@ -82,33 +80,28 @@ class CPCBound:
         # print("alpha_arr: ", self.alpha_arr)
         # print("beta_arr: ", self.beta_arr)
         # print("--------------------------------")
-        self.calculate_bound()
 
     def __str__(self):
         return ''
 
-    def cvt(self, i) :
+    def cvt(self, i):
         return i
 
+    # This function returns es_init value (Refer to Our paper page 7, equation (7))
     def get_esinit(self, deadline, sl_idx):
-        # print(sl_idx, len(self.node_set), self.provider_group, self.critical_path)
-        sum_critical_path = 0
-        for idx in self.critical_path:
-            if idx is not sl_idx:
-                sum_critical_path += self.node_set[idx].exec_t
-
+        # self_looping_provider_idx: The provider's index which contains self-looping node
+        # sum_of_exec_except_self_looping: The summation of the execution times of all nodes in the provider containing self-looping node.
         self_looping_provider_idx = 0
         sum_of_exec_except_self_looping = 0
         for i, provider in enumerate(self.provider_group):
             if sl_idx in provider:
-                # print(i, sl_idx, self.provider_group, provider)
                 self_looping_provider_idx = i
                 for node_idx in provider:
-                    # print(self.node_set[node_idx].vid, self.node_set[node_idx].exec_t)
                     if node_idx is not sl_idx:
                         sum_of_exec_except_self_looping += self.node_set[node_idx].exec_t
 
-        # print(self.provider_group, self_looping_provider_idx, sl_idx)
+        # sum_of_response_time_for_front_providers: Sum of R(V_i) where i < s
+        # sum_of_response_time_for_lateral_providers: Sum of R(V_i) where i > s
         sum_of_response_time_for_front_providers = 0
         sum_of_response_time_for_lateral_providers = 0
 
@@ -118,28 +111,33 @@ class CPCBound:
             if i > self_looping_provider_idx:
                 sum_of_response_time_for_lateral_providers += response_time
 
-        # print("Provider Group: " + str(self.provider_group))
-        # print("Consumer Group: " + str(self.consumer_group))
+        # sum_of_consumer: The sum of execution time of consumer nodes in the provider
         sum_of_consumer = 0
         for consumer_idx in self.consumer_group[self_looping_provider_idx]:
             sum_of_consumer += self.node_set[consumer_idx].exec_t
 
         es_init = deadline - sum_of_response_time_for_front_providers - sum_of_response_time_for_lateral_providers - sum_of_exec_except_self_looping - (sum_of_consumer / self.core_num)
+        # check the value, for debugging
         # print(es_init, deadline, sum_of_response_time_for_front_providers, sum_of_response_time_for_lateral_providers, sum_of_exec_except_self_looping, (sum_of_consumer / self.core_num))
-        # print('deadline: ', deadline, 'sl_idx: ', sl_idx, sum_critical_path, es_init)
+
+        # If the es_init value is negative, set it 0
         if es_init < 0:
             es_init = 0
         return es_init
 
+    # This function returns es_max value (Refer to Our paper page 6)
     def get_esmax(self, deadline, sl_idx):
+        # The sum of the execution times of all nodes in the critical path
         sum_critical_path = 0
         for idx in self.critical_path:
             if idx is not sl_idx:
                 sum_critical_path += self.node_set[idx].exec_t
         es_max = deadline - sum_critical_path
+        # check es_max value, for debugging
         # print('deadline: ', deadline, 'sl_idx: ', sl_idx, sum_critical_path, es_max)
         return es_max
 
+    # This generates a list of nodes. Please refer to class 'Node', line 3
     def generate_node_set(self):
         for i in range(len(self.task_set)):
             node_param = {
@@ -155,11 +153,12 @@ class CPCBound:
             node = Node(**node_param)
             self.node_set.append(node)
 
-        # find the ancestors and descendants of v_j
+        # Find the ancestors and descendants of v_j and store it
         for v_j in self.node_set:
             v_j.anc = self.find_ancestor(v_j.pred)
             v_j.desc = self.find_descendant(v_j.succ)
 
+    # This function finds all the ancestor of v_j, starting from v_j's predecessor(recursive function)
     def find_ancestor(self, pred):
         pred_arr = []
         if pred:
@@ -169,6 +168,7 @@ class CPCBound:
                     if tmp_arr:
                         pred_arr = pred_arr + tmp_arr
 
+        # if any ancestor exists
         if pred_arr:
             ancestor_tmp = pred + pred_arr
             ancestor = []
@@ -179,6 +179,7 @@ class CPCBound:
         else:
             return pred
 
+    # This function finds all the descendant of v_j, starting from v_j's successor(recursive function)
     def find_descendant(self, succ):
         succ_arr = []
         if succ:
@@ -188,6 +189,7 @@ class CPCBound:
                     if tmp_arr:
                         succ_arr = succ_arr + tmp_arr
 
+        # if any descendant exists
         if succ_arr:
             descendant_tmp = succ + succ_arr
             descendant = []
@@ -198,6 +200,8 @@ class CPCBound:
         else:
             return succ
 
+    # This function finds all the path
+    # This function is used to get all paths of a group
     def find_path(self, path, group, path_list):
         current_node = self.node_set[path[-1]]
         if current_node.succ:
@@ -212,6 +216,10 @@ class CPCBound:
         else:
             path_list.append(path)
 
+    # This function calculates critical path
+    # Notice!
+    # Because of nodes which have same execution time, critical path can be different from the other side.
+    # Thus, we add the check state, then unite them with extern critical path
     def get_critical_path(self):
         # set critical path first node as node with level 0
         init_path = []
@@ -238,6 +246,7 @@ class CPCBound:
             if int(node.vid) not in self.critical_path:
                 self.non_critical_nodes.append(int(node.vid))
 
+    # This function is used for getting critical path
     def find_complete_path(self, path):
         current_node = self.node_set[path[-1]]
         succ_num = len(current_node.succ)
@@ -250,13 +259,16 @@ class CPCBound:
                 sub_path += path
                 sub_path.append(i)
                 self.find_complete_path(sub_path)
-        
+
+    # This function actually generate information for provider(Theta), consumer(F group), next provider consumer(G group)
+    # Please refer to Algorithm 1 CPC Paper page 6
     def construct_cpc_model(self):
         self.provider_group = []
         self.consumer_group = []
         self.next_provider_consumer_group = []
 
         non_critical_nodes = self.non_critical_nodes.copy()
+        # Exactly following the Algorithm 1, Step 1: identifying capacity providers
         theta = []
         for idx in range(len(self.critical_path)):
             if idx < len(self.critical_path) - 1:
@@ -269,18 +281,20 @@ class CPCBound:
             else:
                 theta.append(self.critical_path[idx])
                 self.provider_group.append(theta)
-        #print("CP: ", self.critical_path)
-        #print("NCP: ", non_critical_nodes)
-        #print("PG: ", self.provider_group)
-        #print("OCP: ", self.old_cp)
+
+        # Step 2: identifying capacity consumers
+        # Algorithm 1 is wrong, for using concurrent nodes of v_j(i.e., C(V_j)), we need change the,
+        # union of F group  ----> union of Provider
+        # for each provider
         for idx in range(len(self.provider_group)):
+            # This is for sink node
             if idx < len(self.provider_group) - 1:
                 provider = self.provider_group[idx]
                 next_provider = self.provider_group[idx + 1]
-                self.node_set[provider[0]].isProvider = True
                 self.node_set[provider[0]].consumer_group = list(set(self.node_set[next_provider[0]].anc) & set(non_critical_nodes))
                 self.consumer_group.append(self.node_set[provider[0]].consumer_group.copy())
                 next_provider_consumer_group = []
+
                 # for getting G(theta)
                 for v_j in self.provider_group[idx]:
                     node = self.node_set[v_j]
@@ -293,19 +307,25 @@ class CPCBound:
                     intersection = list(set(concurrent_nodes) & set(non_critical_nodes))
                     difference = list(set(intersection) - set(self.node_set[provider[0]].consumer_group))
                     next_provider_consumer_group = list(set(next_provider_consumer_group) | set(intersection))
-                    # print(v_j," ", union, concurrent_nodes, intersection, next_provider_consumer_group)
+
                 next_provider_consumer_group = list(set(next_provider_consumer_group) - set(self.node_set[provider[0]].consumer_group))
                 self.node_set[provider[0]].consumer_next_provider_group = next_provider_consumer_group.copy()
                 non_critical_nodes = list(set(non_critical_nodes) - set(self.node_set[provider[0]].consumer_group))
                 self.next_provider_consumer_group.append(next_provider_consumer_group.copy())
-                #print("F(theta_i)", self.node_set[provider[0]].consumer_group)
-                #print("G(theta_i)", self.node_set[provider[0]].consumer_next_provider_group)
+
+                # For checking, you can remove this.
+                # print("F(theta_i)", self.node_set[provider[0]].consumer_group)
+                # print("G(theta_i)", self.node_set[provider[0]].consumer_next_provider_group)
+
+            # This is for sink node
             else:
                 self.consumer_group.append([])
                 self.next_provider_consumer_group.append([])
 
+    # This function generates interference group and stores them into the each node
     def generate_interference_group(self):
         non_critical_group = self.non_critical_nodes.copy()
+        # For topological order, we need sorted node_set by node level
         node_set_sort = sorted(self.node_set, key=lambda node : node.level)
 
         for node in node_set_sort:
@@ -313,12 +333,14 @@ class CPCBound:
             union = list(set(node.anc) | set(node.desc))
             node_set = []
 
+            # Getting the node set without the node itself
             for inter in self.node_set:
                 if int(inter.vid) not in node_set and int(inter.vid) != int(node.vid):
                     node_set.append(int(inter.vid))
+
+            # refer to CPC paper page 9, equation (4)
             node.concurrent_group = list(set(node_set) - set(union))
             node.non_critical_group = list(set(non_critical_group) & set(node.concurrent_group))
-            # print(node.vid, node.concurrent_group, node.non_critical_group)
             anc_interference_group = []
             for idx in node.anc:
                 anc_interference_group = list(set(anc_interference_group) | set(self.node_set[idx].interference_group))
@@ -328,13 +350,16 @@ class CPCBound:
             node.interference_group = list(set(non_critical_group) & set(non_anc_interference_group))
             # print(node.vid, node.concurrent_group, anc_interference_group, non_anc_interference_group, node.interference_group)
 
+    # This function calculates finish time bound and stores them into the each node
     def generate_finish_time_bound(self):
         # source node's finish time is 0 + its exec_t
         for node in self.node_set:
             if node.level == 0:
                 node.finish_time = node.exec_t
 
+        # For topological order, we need sorted node_set by node level
         node_set_sort = sorted(self.node_set, key=lambda node: node.level)
+
         for node in node_set_sort:
             pred_finish = []
             for idx in node.pred:
@@ -354,8 +379,13 @@ class CPCBound:
 
             if pred_finish:
                 node.finish_time = node.exec_t + max(pred_finish) + interference
+
+            # Check the finish time bound.
             # print(node.vid, node.finish_time)
 
+    # This function calculates alpha, beta value of all the providers and stores them into alpha_arr, beta_arr respectively.
+    # Note that, finish_time_provider_arr stores finish time bound of each provider.
+    # Note that, finish_time_consumer_arr stores finish time bound of the latest consumer node's finish time bound.
     def get_alpha_beta(self):
         self.finish_time_provider_arr = []
         self.alpha_arr = []
@@ -380,7 +410,9 @@ class CPCBound:
             self.finish_time_consumer_arr.append(consumer_finish_time)
 
         for theta_i in range(len(self.provider_group)):
+            # The union of consumer group and next providers consumer group
             list_f_g_union = list(set(self.consumer_group[theta_i]) | set(self.next_provider_consumer_group[theta_i]))
+            # Getting alpha_i of provider_i (refer to CPC paper 9, equation (7)
             graph_a = []
             graph_b = []
             for v_j in list_f_g_union:
@@ -390,7 +422,6 @@ class CPCBound:
                 elif self.node_set[v_j].finish_time > self.finish_time_provider_arr[theta_i] and self.node_set[v_j].finish_time - self.node_set[v_j].exec_t < self.finish_time_provider_arr[theta_i]:
                     graph_b.append(v_j)
 
-            # print(theta_i,graph_a, graph_b)
             sum_a = 0
             sum_b = 0
             for a in graph_a:
@@ -402,6 +433,7 @@ class CPCBound:
             # print(alpha_i)
             self.alpha_arr.append(alpha_i)
 
+            # Getting beta_i of provider_i (refer to CPC paper page 10, equation (9))
             # recursively search predecessor node which contribute to the longest path
             longest_local_path = []
             # print(self.consumer_group)
@@ -424,20 +456,21 @@ class CPCBound:
                     beta_i += self.node_set[idx].finish_time - self.finish_time_provider_arr[theta_i]
             self.beta_arr.append(beta_i)
 
-
+    # This function provides all paths of a part of DAG
     def get_all_path_of_group(self, group):
         all_path = []
         for idx in group:
             path_list = []
             path = []
             path.append(idx)
+
             self.find_path(path, group, path_list)
             if path_list:
-                # print(idx, path_list)
                 for p in path_list:
                     if all_path:
                         is_sub = False
                         for a in all_path:
+                            # if path p is already in all_path list, break the iteration
                             if self.is_sub_list(p, a):
                                 is_sub = True
                                 break
@@ -447,6 +480,7 @@ class CPCBound:
                         all_path.append(p)
         return all_path
 
+    # This function filter out the overlapped path
     def is_sub_list(self, sub_list, super_list):
         unique_elements = set(sub_list)
         for e in unique_elements:
@@ -455,19 +489,14 @@ class CPCBound:
         # It is sublist
         return True
 
-    def get_local_path(self, consumer_group):
-        # a provider has local path in its consumer group F(theta_i)
-        # print(consumer_group)
-        pass
-
+    # This function generates longest_local_path for calculating beta_i
     def get_longest_path(self, longest_local_path, i, f_theta_i):
         all_local_path = self.get_all_path_of_group(self.consumer_group[i])
-        # print(i, all_local_path)
+
         pred_candidate = []
         if longest_local_path:
             end_node_idx = longest_local_path[0]
 
-            # print(i, self.node_set[end_node_idx].pred)
             for pred_idx in self.node_set[end_node_idx].pred:
                 if self.node_set[pred_idx].finish_time > f_theta_i:
                     pred_candidate.append(pred_idx)
@@ -475,7 +504,6 @@ class CPCBound:
         loc_path_after = []
         local_path = []
         if pred_candidate:
-            # print(pred_candidate)
             max_f = 0
             max_i = 0
             for i in pred_candidate:
@@ -512,19 +540,7 @@ class CPCBound:
             longest_local_path = []
         return longest_local_path
 
-    def assign_priority(self, graph):
-        for i in range(len(self.task_set)):
-            print(self.task_set[i])
-
-    def get_initial_budget_bound(self, ):
-        print(self.task_set)
-
-    def budget_bound_analysis(self):
-        print(self.self_looping_idx)
-
-    def check_budget_bound(self, budget, wcet):
-        print(self.task_set)
-
+    # This function calculates response time bounds of all the providers, and return the total response time bound
     def calculate_bound(self):
         sum_response_time = 0
         # print("Provider Group: " + str(self.provider_group))
@@ -551,6 +567,7 @@ class CPCBound:
 
         return sum_response_time
 
+    # Deprecated, it was for slicing the self-looping node
     def setting_theta(self, self_looping_idx):
         self.self_looping_idx = self_looping_idx
         self.get_critical_path() 
@@ -580,6 +597,7 @@ class CPCBound:
         # print("consumer_group (F)", self.consumer_group)
         # print("next_provider_consumer_group (G)", self.next_provider_consumer_group)
 
+    # Deprecated, no more using. Because we now don't slice the self-looping node
     def update_cpc_model(self):
         non_critical_nodes = self.non_critical_nodes.copy()
         self.consumer_group = []
@@ -588,7 +606,7 @@ class CPCBound:
             if idx < len(self.provider_group) - 1:
                 provider = self.provider_group[idx]
                 next_provider = self.provider_group[idx + 1]
-                self.node_set[provider[0]].isProvider = True
+
                 self.node_set[provider[0]].consumer_group = list(set(self.node_set[next_provider[0]].anc) & set(non_critical_nodes))
                 self.consumer_group.append(self.node_set[provider[0]].consumer_group.copy())
                 next_provider_consumer_group = []
@@ -613,15 +631,16 @@ class CPCBound:
                 self.consumer_group.append([])
                 self.next_provider_consumer_group.append([])
 
+    # This function is for updating response time bound considering priority.
     def update_with_priority(self, priority_list=None):
         # print("length:", len(priority_list), "arr:", priority_list)
         # update priority when priority list is given - assume priority list is already updated
+        # please refer assign_priority function in priority.py
         if priority_list is not None:
             self.priority_list = priority_list
             for idx in range(len(self.node_set)):
                 self.node_set[idx].priority = priority_list[idx]
 
-        # print(self.priority_list)
         self.update_interfere_group_priority()
         self.update_finish_time_bound_priority()
         # print("Before: ", self.alpha_arr, self.beta_arr)
@@ -630,6 +649,8 @@ class CPCBound:
         bound = self.calculate_bound_priority()
         return bound
 
+    # This function is for updating interfering groups considering priority
+    # Please refer to CPC paper page 10, equation (10)
     def update_interfere_group_priority(self):
         for node in self.node_set:
             node.interference_group_priority = []
@@ -650,6 +671,7 @@ class CPCBound:
                 else:
                     break
 
+    # This function is for updating finish time bound because interfering group is changed
     def update_finish_time_bound_priority(self):
         # source node's finish time is 0 + its exec_t
         for node in self.node_set:
@@ -676,8 +698,8 @@ class CPCBound:
 
             if pred_finish:
                 node.finish_time = node.exec_t + max(pred_finish) + interference
-            # print(node.vid, node.finish_time)
 
+    # This function calculates response time bound considering priority (refer to CPC paper page 11, equation (11))
     def calculate_bound_priority(self):
         self.response_priority_arr = []
         # print("longest", self.longest_local_path_group)
@@ -793,6 +815,10 @@ class CPCBackup(CPCBound) :
         node_dict[len(self.task_set)] = new_num
         self.node_dict = node_dict
 
+        # for i in self.dangling_dag:
+        #     print(i)
+
+        # print("DAG CP: ", self.dag.critical_path, " DANGLING NODES: ", self.dangling_dag)
         for i in range(len(self.task_set)):
             if i not in self.dangling_dag :
                 idx = node_dict[i]
@@ -809,6 +835,7 @@ class CPCBackup(CPCBound) :
                 self.node_set.append(node)
                 if i in self.dag.critical_path :
                     self.critical_path.append(node_dict[i])
+        # print("BACKUP CP: ", self.critical_path)
 
         new_level = max([self.task_set[d].level for d in self.dangling_dag])
         node_param = {
@@ -834,7 +861,11 @@ class CPCBackup(CPCBound) :
             v_j.anc = self.find_ancestor(v_j.pred)
             v_j.desc = self.find_descendant(v_j.succ)
 
+        # for i in self.node_set:
+        #     print(i)
+
     def cvt(self, i):
+        # print("NodeDict" + str(self.node_dict))
         return self.node_dict[i]
 
     def get_critical_path(self) :

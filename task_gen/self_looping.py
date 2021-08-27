@@ -122,18 +122,19 @@ def SelfLoopingDag(dag_input, dangling_num) :
         dag = DAGFile(dag_input)
     else :
         dag = DAGGen(**dag_input)
-    
+
+    # print(dag)
     dag.critical_path = calculate_critical_path(dag)
     dag, sl = assign_looping(dag, dag.critical_path, dangling_num)
-
+    # print(dag)
     ## Add parent / child dependency for backup
     dag.backup_parent = []
     dag.backup_child = []
     dag_len = len(dag.task_set)
 
     for i, task in enumerate(dag.task_set) :
-        for child in task.child :
-            if i not in dag.dangling_dag : # Non dangling
+        for child in task.child:
+            if i not in dag.dangling_dag:  # Non dangling
                 if child in dag.dangling_dag :  # nd -> d
                     dag.backup_parent.append(i)
                     dag.task_set[i].child_b.append(dag_len)

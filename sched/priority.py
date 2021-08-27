@@ -164,17 +164,17 @@ def find_minimum_nonzero(input) :
     return min_val, min_idx
 
 
-def calculate_makespan(dag, core_num, priority_list_extern, backup_priority_list_extern, backup=False):
-    if backup :
-        return makespan_backup(dag, core_num, priority_list_extern)
-    else :
+def calculate_makespan(dag, core_num, priority_list_extern, backup_priority_list_extern, critical_path_back_up, backup=False):
+    if backup:
+        return makespan_backup(dag, core_num, backup_priority_list_extern, critical_path_back_up)
+    else:
         return makespan(dag, core_num, priority_list_extern)
 
 def makespan(dag, core_num, priority_list_extern):
     dag_len = len(dag.task_set)
     # priority_list = assign_priority(dag, [i for i in range(dag_len)], [i for i in range(dag_len)])
     priority_list = priority_list_extern
-    print("MakeSpan Priority List: " + str(priority_list))
+    # print("MakeSpan Priority List: " + str(priority_list))
     priority_pair = []
     waiting = []
     queue = PriorityQueue()
@@ -251,13 +251,16 @@ def makespan(dag, core_num, priority_list_extern):
     return time
 
 
-def makespan_backup(dag, core_num, priority_list_extern):
+def makespan_backup(dag, core_num, priority_list_extern, critical_path_extern):
     dag_len = len(dag.task_set)
-    # print(dag_len)
+    # print(dag)
+    # print(dag.dangling_dag)
+    # print("MakeSpan Priority List: " + str(priority_list_extern))
     priority_list = assign_priority(dag, [i for i in range(dag_len)], [i for i in range(dag_len)])
-    # print(len(priority_list))
+    # print("MakeSpan Priority List: " + str(priority_list))
     # print(len(priority_list_extern))
-    #priority_list = priority_list_extern
+    # priority_list = priority_list_extern.copy()
+    # print(len(priority_list))
     priority_pair = []
     waiting = []
     queue = PriorityQueue()
@@ -270,7 +273,7 @@ def makespan_backup(dag, core_num, priority_list_extern):
     for i, p in enumerate(priority_list):
         priority_pair.append((p*(-1), i))
         waiting.append(len(dag.task_set[i].parent))
-        if waiting[i]==0 :
+        if waiting[i] == 0:
             visited[i] = True
             queue.put(priority_pair[i])
 
@@ -282,6 +285,7 @@ def makespan_backup(dag, core_num, priority_list_extern):
             waiting[-1] += 1
     
     critical_path = calculate_critical_path(dag, [i for i in range(dag_len)])
+    # critical_path = critical_path_extern
     next_level = max([dag.task_set[d].level for d in dag.dangling_dag])
     if next_level == len(critical_path) - 1:
         next_level = -1
@@ -344,8 +348,9 @@ def makespan_backup(dag, core_num, priority_list_extern):
                             queue.put(priority_pair[child])
                 else :
                     for child in dag.task_set[execute[loc]].child :
-                        if child in dag.dangling_dag :
+                        if child in dag.dangling_dag:
                             child = -1
+                        # print(child)
                         waiting[child] -= 1
                         if waiting[child] == 0 :
                             queue.put(priority_pair[child])
